@@ -11,9 +11,20 @@ struct parameters
     struct parameters *next;
 };
 
-int processCommand(char *userCmd)
+int processCommand(char *userCmd, char *ptr)
 {
-    printf("%s\n", userCmd);
+    char *argument;
+    char *token;
+
+    while (strcmp(argument, "\n") != 0)
+    {
+        token = strtok_r(NULL, " ", &ptr);
+        argument = calloc(strlen(token) + 1, sizeof(char));
+        strcpy(argument, token);
+
+        printf("%s", argument);
+    };
+
     return 0;
 }
 /* 
@@ -71,20 +82,26 @@ int main()
     // If the input is not a newline we process the command.
     if (strcmp(userCommand, "\n") != 0)
     {
-        printf("%s\n", userCommand);
-        // If the command is not a newline it is either a comment or command
-        // We use strtok_r to get the first piece of the command terminated by a space or null
-        char *token = strtok(userCommand, " ");
+        char *saveptr; // used to get a copy of the 
+        char *ptr;
+        // The first token is the command 
+        char *token = strtok_r(userCommand, " ", &ptr);
         char *command = calloc(strlen(token) + 1, sizeof(char));
         strcpy(command, token);
-        
-        // Check if we have a comment or command. 
+        strcpy(saveptr, ptr);
+
+        token = strtok_r(NULL, "/n", &ptr);
+        char *eof = calloc(strlen(token) + 1, sizeof(char));
+
+        // START HERE, ITERATE THROUGH TO FIND OUT IF THERE'S A NEW LINE.
+
+        // Make sure it's not a comment and see if it has any following words. 
         if (strcmp(command, "#") != 0)
         {
-            printf("%s\n %s\n %s\n", token, command, userCommand);
-            processCommand(userCommand);
-        }
+            //processCommand(userCommand, saveptr);
 
+            printf("%d", newCount);
+        }
     }
 
     //execlp(userCommand);
