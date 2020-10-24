@@ -26,7 +26,7 @@ int main()
     // Reserve space for a command up to 2048 characters long with two extra for newline
     char userCommand[2050];
     char *arguments[513];
-    char exitCommand[] = "exit\n";
+    char exitCommand[] = "exit";
     char expansion[] = "$$";
     int i = 0;
 
@@ -38,6 +38,7 @@ int main()
 
     // Read user data
     fgets(userCommand, 2050, stdin);
+    userCommand[strcspn(userCommand, "\n")] = 0;
 
     // Process the command
     char *ptr;
