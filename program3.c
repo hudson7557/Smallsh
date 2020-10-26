@@ -14,6 +14,39 @@ struct userComm
     char *outputFile;
 };
 
+char *replacePId(char **args, int i, char *pId)
+{
+    int j = 0;
+    int length = strlen(args[j]) + 1;
+    int pIdLength = strlen(pId);
+    char myVar[length];
+    strcpy(myVar, args[j]);
+    // We make final var big enough to hold both the pId and the value attached if need be. 
+    char finalVar[length + pIdLength];
+
+    /*
+    * Adapted from <StackOverFlow> (<12/18/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
+    * This was used to get individual characters so that I can check for "$$".
+    */
+    char* s;
+    int index = 0;
+    char myLetter;
+
+    for ( s=&myVar[0]; *s != '\0'; s++ )
+    {   
+        // Finds the occurances of $$
+        if (strncmp(s, "$$", 2) == 0)
+        {
+            printf("%c\n", myVar[index]);
+            // increment s so we aren't looking at the same value
+            s++;
+        }
+
+    }
+    return replacedArguments 
+}
+
+
 struct userComm *makeStruct(char **args, int i)
 {
     int j = 0;
@@ -131,6 +164,7 @@ int main()
                 } while (token != NULL && i < 513);
 
                 // Now that we have read in and parsed the whole string we create a struct
+                char *processedArg = replacePId(arguments, i, processId);
                 struct userComm *commandStruct = makeStruct(arguments, i);
                 //printArgs(arguments, i);                
 
