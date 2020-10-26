@@ -14,7 +14,55 @@ struct userComm
     char *outputFile;
 };
 
-void printArgs(char *args, int i)
+struct userComm *makeStruct(char **args, int i)
+{
+    int j = 0;
+    char *parsedArguments[512];
+    struct userComm *commandStruct = malloc(sizeof(struct userComm)); 
+
+    // Allocate space for the command and then assign it.
+    commandStruct->command = calloc(strlen(args[j]) + 1, sizeof(char));
+    commandStruct->command = args[j];
+    j++;
+
+    while (j != i)
+    {
+        if (strcmp(args[j], "<") == 0)
+        {
+            // Since we've hit the indicator for input file we know the next arg is the input file
+            j++; // hence, we increment j before assignment.
+            commandStruct->inputFile = calloc(strlen(args[j]) + 1, sizeof(char));
+            commandStruct->inputFile = args[j];
+            // Increment again so we don't get a duplicate
+            j++; 
+        }
+
+        else if (strcmp(args[j], ">") == 0)
+        {
+            // Same as the input indicator, we know we want to pay attention to the next arg
+            j++; // hence, we increment j before assignment.
+            commandStruct->outputFile = calloc(strlen(args[j]) + 1, sizeof(char));
+            commandStruct->outputFile = args[j];
+            // Increment again so we don't get a duplicate
+            j++;
+        }
+
+        // Since we've already taken the command out, and we know it's not an input or output file
+        // We know it's an argument for the command and assign it as such. 
+        else
+        {
+            parsedArguments[j] = args[j];
+            j++;
+        }
+
+    }
+
+    return commandStruct;
+}
+
+
+
+void printArgs(char **args, int i)
 {
     for (int j=0; j < i; j++)
     {
@@ -22,9 +70,17 @@ void printArgs(char *args, int i)
     }
 }
 
+void printCommand(struct userComm* userCommand)
+{
+    printf("%s, %d, %s, %s\n", userCommand->command,
+    strlen(userCommand->arguments),
+    userCommand->inputFile,
+    userCommand->outputFile);
+}
 
 int main()
 {
+
     
     // Reserve space for a command up to 2048 characters long with two extra for newline
     char userCommand[2050];
@@ -59,20 +115,13 @@ int main()
             char *ptr;
             char *secondPtr;
             char *token = strtok_r(userCommand, " ", &ptr); 
-            char *expandToken = strtok_r(token, "$$", &secondPtr); // Doesn't work for a double character. 
-
-            // If the tokens are the same we didn't find a $$
-            if (strcmp(token, expandToken) != 0)
-            {
-                strcpy(buffer, expandToken);
-                strcat(buffer, processId);
-                printf("%s\n", buffer);
-            }
             
             arguments[i] = token;
 
+            // If the token is not a comment
             if (strcmp(token, "#") != 0)
             {
+                // Create a pointer array to store the arguments
                 do
                 {   
                     i++;
@@ -80,14 +129,10 @@ int main()
                      
                     arguments[i] = token;
                 } while (token != NULL && i < 513);
-                /*
-                for (int j=0; j < i; j++)
-                {
-                    printf("%d %s\n", j, arguments[j]);
-                }
-                */
 
-                
+                // Now that we have read in and parsed the whole string we create a struct
+                struct userComm *commandStruct = makeStruct(arguments, i);
+                //printArgs(arguments, i);                
 
             }
         }
