@@ -19,41 +19,57 @@ void replacePId(char **args, int i, char *pId)
     // For loop to loop through the args
     for (int x=0; x < i; x++)
     {
-        printf("%s\n", args[x]);
         int argLength = strlen(args[x]);
         int pIdLength = strlen(pId);
         int totalLength = argLength + pIdLength;
-        char replacedVar[totalLength];
+
+        // Create variables to hold our strings. 
+        char *array = calloc( totalLength + 2, sizeof(char));
         char myVar[argLength];
+
+        // we copy over the argument to allow us to access it through subscript
         strcpy(myVar, args[x]);
-        myVar[0] = 'a';
+    
 
         /*
         * Adapted from <StackOverFlow> (<12/18x/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
         * This was used to get individual characters so that I can check for "$$".
-        
-
-        char* s;
-
-        for ( s=&myVar[0]; *s != '\0'; s++ )
-        {   
-            // Finds the occurances of $$
-            if (strncmp(s, "$$", 2) == 0)
-            {
-                printf("%c\n", myVar[*s]);
-                // increment s so we aren't looking at the same value
-                s++;
-            }
-        }
-        strcat(replacedVar, args[x]);
-        strcat(replacedVar, pId);
         */
 
+        char* s;
+        // We use two pointers to account for the possible difference in size of the array when expansion occurs.
+        int q = 0;
+        int r = 0;
+
+        // Loop through the string, the first character is removed on each iteration
+        // and the first two characters are evaluated for whether they are $$.
+        for ( s=&myVar[0]; *s != '\0'; s++ )
+        {   
+            if (strncmp(s, "$$", 2) == 0)
+            {
+                // If the first two characters of the substring are $$ we concatenated the pId into our array
+                strcat(array, pId);
+                s++; // Increment s again so we don't look at the second $
+
+                // q is our pointer for the array, which we increment as much as needed for the pId
+                q = q + pIdLength;
+
+                // r is our point for the "string", we increment it twice to skip copying the $$
+                r = r + 2;
+            }
+            else
+            {
+                // if the $$ character is not found we assign an index and increment our pointers. 
+                array[q] = myVar[r];
+                q++;
+                r++;
+            }
+        }
 
         // We conclude by reassigning the variable.
-        args[x] = replacedVar;
+        args[x] = array;
 
-        printf("%d, %s, %d, %s\n", argLength, pId, pIdLength, myVar);
+        printf("%d, %s, %d, %s\n", argLength, pId, pIdLength, args[x]);
 
     }
 }
