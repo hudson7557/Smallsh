@@ -53,7 +53,7 @@ void replacePId(char **args, int i, char *pId)
         // We conclude by reassigning the variable.
         args[x] = replacedVar;
 
-        printf("%d, %s, %d, %s\n", argLength, pId, pIdLength, args[x]);
+        printf("%d, %s, %d, %s\n", argLength, pId, pIdLength, myVar);
 
     }
 }
