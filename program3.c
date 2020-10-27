@@ -9,7 +9,7 @@
 struct userComm
 {
     char *command;
-    char *arguments; // Effectively an array
+    char *arguments[512];
     char *inputFile;
     char *outputFile;
 };
@@ -29,7 +29,6 @@ void replacePId(char **args, int i, char *pId)
 
         // we copy over the argument to allow us to access it through subscript
         strcpy(myVar, args[x]);
-    
 
         /*
         * Adapted from <StackOverFlow> (<12/18x/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
@@ -74,7 +73,6 @@ void replacePId(char **args, int i, char *pId)
 struct userComm *makeStruct(char **args, int i)
 {
     int j = 0;
-    char *parsedArguments[512];
     struct userComm *commandStruct = malloc(sizeof(struct userComm)); 
 
     // Allocate space for the command and then assign it.
@@ -108,17 +106,17 @@ struct userComm *makeStruct(char **args, int i)
         // We know it's an argument for the command and assign it as such. 
         else
         {
-            parsedArguments[j] = args[j];
+            commandStruct->arguments[j] = calloc(strlen(args[j]) + 1, sizeof(char));
+            commandStruct->arguments[j] = args[j];
             j++;
         }
     }
-    // Assign arguments here. 
-    commandStruct->arguments = *parsedArguments;
+
 
     return commandStruct;
 }
 
-void printArgs(char* args, int i)
+void printArgs(char **args, int i)
 {
     for (int j=0; j < i; j++)
     {
@@ -128,11 +126,10 @@ void printArgs(char* args, int i)
 
 void printCommand(struct userComm* userCommand, int i)
 {
-    printf("%s, %d, %s, %s\n", userCommand->command,
-    userCommand->arguments,
+    printf("Command: %s\nInput: %s\nOutput: %s\n", userCommand->command,
     userCommand->inputFile,
     userCommand->outputFile);
-    //printArgs(userCommand->arguments, i);
+    printArgs(userCommand->arguments, i);
 }
 
 int main()
@@ -192,7 +189,7 @@ int main()
                     replacePId(arguments, i, processId);
                     struct userComm *commandStruct = makeStruct(arguments, i);
                     // printArgs(arguments, i); 
-                    //printCommand(commandStruct, i);               
+                    printCommand(commandStruct, i);               
                 }
             }
         }
