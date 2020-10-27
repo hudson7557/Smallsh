@@ -14,36 +14,47 @@ struct userComm
     char *outputFile;
 };
 
-char *replacePId(char **args, int i, char *pId)
+void replacePId(char **args, int i, char *pId)
 {
-    int j = 0;
-    int length = strlen(args[j]) + 1;
-    int pIdLength = strlen(pId);
-    char myVar[length];
-    strcpy(myVar, args[j]);
-    // We make final var big enough to hold both the pId and the value attached if need be. 
-    char finalVar[length + pIdLength];
+    // For loop to loop through the args
+    for (int x=0; x < i; x++)
+    {
+        printf("%s\n", args[x]);
+        int argLength = strlen(args[x]);
+        int pIdLength = strlen(pId);
+        int totalLength = argLength + pIdLength;
+        char replacedVar[totalLength];
+        char myVar[argLength];
+        strcpy(myVar, args[x]);
 
-    /*
-    * Adapted from <StackOverFlow> (<12/18/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
-    * This was used to get individual characters so that I can check for "$$".
-    */
-    char* s;
-    int index = 0;
-    char myLetter;
+        /*
+        * Adapted from <StackOverFlow> (<12/18x/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
+        * This was used to get individual characters so that I can check for "$$".
+        
 
-    for ( s=&myVar[0]; *s != '\0'; s++ )
-    {   
-        // Finds the occurances of $$
-        if (strncmp(s, "$$", 2) == 0)
-        {
-            printf("%c\n", myVar[index]);
-            // increment s so we aren't looking at the same value
-            s++;
+        char* s;
+
+        for ( s=&myVar[0]; *s != '\0'; s++ )
+        {   
+            // Finds the occurances of $$
+            if (strncmp(s, "$$", 2) == 0)
+            {
+                printf("%c\n", myVar[*s]);
+                // increment s so we aren't looking at the same value
+                s++;
+            }
         }
+        strcat(replacedVar, args[x]);
+        strcat(replacedVar, pId);
+        */
+
+
+        // We conclude by reassigning the variable.
+        args[x] = replacedVar;
+
+        printf("%d, %s, %d, %s\n", argLength, pId, pIdLength, args[x]);
 
     }
-    return replacedArguments 
 }
 
 
@@ -87,13 +98,12 @@ struct userComm *makeStruct(char **args, int i)
             parsedArguments[j] = args[j];
             j++;
         }
-
     }
+    // Allocate memory for parsedArguments here. 
+    // Assign arguments here. 
 
     return commandStruct;
 }
-
-
 
 void printArgs(char **args, int i)
 {
@@ -113,8 +123,6 @@ void printCommand(struct userComm* userCommand)
 
 int main()
 {
-
-    
     // Reserve space for a command up to 2048 characters long with two extra for newline
     char userCommand[2050];
     char *arguments[513];
@@ -164,14 +172,19 @@ int main()
                 } while (token != NULL && i < 513);
 
                 // Now that we have read in and parsed the whole string we create a struct
-                char *processedArg = replacePId(arguments, i, processId);
-                struct userComm *commandStruct = makeStruct(arguments, i);
-                //printArgs(arguments, i);                
-
+                // Also make sure it's not an exit command because we don't want to mess with that.
+                if (strcmp(arguments[0], exitCommand) != 0)
+                {
+                    replacePId(arguments, i, processId);
+                    struct userComm *commandStruct = makeStruct(arguments, i);
+                    // printArgs(arguments, i);                
+                }
             }
         }
+
         // reset i after each iteration
-        i = 0; 
+        i = 0;
+
     } while (strcmp(arguments[0], exitCommand) != 0);
 
     // HERE IS WHERE WE'LL CALL/IMPLEMENT THE EXIT HANDLER.
