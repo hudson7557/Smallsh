@@ -73,6 +73,7 @@ void replacePId(char **args, int i, char *pId)
 struct userComm *makeStruct(char **args, int i)
 {
     int j = 0;
+    int x = 0;
     struct userComm *commandStruct = malloc(sizeof(struct userComm)); 
 
     // Allocate space for the command and then assign it.
@@ -106,9 +107,10 @@ struct userComm *makeStruct(char **args, int i)
         // We know it's an argument for the command and assign it as such. 
         else
         {
-            commandStruct->arguments[j] = calloc(strlen(args[j]) + 1, sizeof(char));
-            commandStruct->arguments[j] = args[j];
+            commandStruct->arguments[x] = calloc(strlen(args[j]) + 1, sizeof(char));
+            strcpy(commandStruct->arguments[x], args[j]);
             j++;
+            x++;
         }
     }
 
@@ -118,7 +120,7 @@ struct userComm *makeStruct(char **args, int i)
 
 void printArgs(char **args, int i)
 {
-    for (int j=0; j < i; j++)
+    for (int j=0; j < i - 1; j++)
     {
         printf("%s\n", args[j]);
     }
@@ -188,8 +190,8 @@ int main()
                 {
                     replacePId(arguments, i, processId);
                     struct userComm *commandStruct = makeStruct(arguments, i);
-                    // printArgs(arguments, i); 
-                    printCommand(commandStruct, i);               
+                    // printArgs(commandStruct->arguments, i); 
+                    // printCommand(commandStruct, i);               
                 }
             }
         }
