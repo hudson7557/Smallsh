@@ -37,7 +37,7 @@ void replacePId(char **args, int i, char *pId)
         */
 
         char* s;
-        // We use two pointers to account for the possible difference in size of the array when expansion occurs.
+        // We use two seperate indexes to account for the possible difference when expansion occurs.
         int q = 0;
         int r = 0;
 
@@ -51,10 +51,10 @@ void replacePId(char **args, int i, char *pId)
                 strcat(array, pId);
                 s++; // Increment s again so we don't look at the second $
 
-                // q is our pointer for the array, which we increment as much as needed for the pId
+                // q is our index for the array, which we increment as much as needed for the pId
                 q = q + pIdLength;
 
-                // r is our point for the "string", we increment it twice to skip copying the $$
+                // r is our index for the "string", we increment it twice to skip copying the $$
                 r = r + 2;
             }
             else
@@ -65,12 +65,8 @@ void replacePId(char **args, int i, char *pId)
                 r++;
             }
         }
-
         // We conclude by reassigning the variable.
         args[x] = array;
-
-        printf("%d, %s, %d, %s\n", argLength, pId, pIdLength, args[x]);
-
     }
 }
 
@@ -116,13 +112,13 @@ struct userComm *makeStruct(char **args, int i)
             j++;
         }
     }
-    // Allocate memory for parsedArguments here. 
     // Assign arguments here. 
+    commandStruct->arguments = *parsedArguments;
 
     return commandStruct;
 }
 
-void printArgs(char **args, int i)
+void printArgs(char* args, int i)
 {
     for (int j=0; j < i; j++)
     {
@@ -130,12 +126,13 @@ void printArgs(char **args, int i)
     }
 }
 
-void printCommand(struct userComm* userCommand)
+void printCommand(struct userComm* userCommand, int i)
 {
     printf("%s, %d, %s, %s\n", userCommand->command,
-    strlen(userCommand->arguments),
+    userCommand->arguments,
     userCommand->inputFile,
     userCommand->outputFile);
+    //printArgs(userCommand->arguments, i);
 }
 
 int main()
@@ -194,7 +191,8 @@ int main()
                 {
                     replacePId(arguments, i, processId);
                     struct userComm *commandStruct = makeStruct(arguments, i);
-                    // printArgs(arguments, i);                
+                    // printArgs(arguments, i); 
+                    //printCommand(commandStruct, i);               
                 }
             }
         }
