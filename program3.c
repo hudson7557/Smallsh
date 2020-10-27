@@ -26,6 +26,7 @@ void replacePId(char **args, int i, char *pId)
         char replacedVar[totalLength];
         char myVar[argLength];
         strcpy(myVar, args[x]);
+        myVar[0] = 'a';
 
         /*
         * Adapted from <StackOverFlow> (<12/18x/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
