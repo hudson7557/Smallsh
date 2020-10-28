@@ -151,7 +151,9 @@ void printCommand(struct userComm* userCommand)
 int exitFunction(int pid)
 {
     // might need to change this to kill the process group
-    kill((-1 * pid), SIGTERM);
+    // if so simply swith -2 to processGroupId.
+    int processGroupId = -1 * pid;
+    kill(-2 , SIGTERM);
     return 0;
 }
 
@@ -182,7 +184,7 @@ int cdFunction(struct userComm* userCommand)
 
 int statusFunction(struct userComm* userCommand)
 {
-    printf("Hello");
+    
 }
 
 int sleeper()
@@ -246,10 +248,10 @@ int main()
 
     do
     {
-        char cwd[256];
-        getcwd(cwd, sizeof(cwd));
+        // char cwd[256];
+        // getcwd(cwd, sizeof(cwd));
         // printf should be okay here since this isn't a signal handler.
-        printf("%s in %s\n", processId, cwd);
+        // printf("%s in %s\n", processId, cwd);
         printf(": ");
         fflush(stdout);
 
