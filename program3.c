@@ -10,6 +10,7 @@ struct userComm
 {
     char *command;
     char *arguments[512];
+    int numberOfArgs;
     char *inputFile;
     char *outputFile;
     char *background;
@@ -119,26 +120,26 @@ struct userComm *makeStruct(char **args, int i)
         j++;
     }
 
-
+    commandStruct->numberOfArgs = x;
     return commandStruct;
 }
 
 void printArgs(char **args, int i)
 {
-    for (int j=0; j < i - 1; j++)
+    for (int j=0; j < i; j++)
     {
         printf("%s\n", args[j]);
     }
 }
 
-void printCommand(struct userComm* userCommand, int i)
+void printCommand(struct userComm* userCommand)
 {
     printf("Command: %s\nInput: %s\nOutput: %s\nBackground: %s\n", userCommand->command,
     userCommand->inputFile,
     userCommand->outputFile,
     userCommand->background);
 
-    printArgs(userCommand->arguments, i);
+    printArgs(userCommand->arguments, userCommand->numberOfArgs);
 
 }
 
@@ -199,7 +200,7 @@ int main()
                     replacePId(arguments, i, processId);
                     struct userComm *commandStruct = makeStruct(arguments, i);
                     // printArgs(commandStruct->arguments, i); 
-                    // printCommand(commandStruct, i);               
+                    printCommand(commandStruct);               
                 }
             }
         }
