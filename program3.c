@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -58,6 +59,7 @@ void replacePId(char **args, int i, char *pId)
                 // r is our index for the "string", we increment it twice to skip copying the $$
                 r = r + 2;
             }
+
             else
             {
                 // if the $$ character is not found we assign an index and increment our pointers. 
@@ -65,12 +67,13 @@ void replacePId(char **args, int i, char *pId)
                 q++;
                 r++;
             }
+
         }
         // We conclude by reassigning the variable.
         args[x] = array;
+
     }
 }
-
 
 struct userComm *makeStruct(char **args, int i)
 {
@@ -116,8 +119,10 @@ struct userComm *makeStruct(char **args, int i)
             strcpy(commandStruct->arguments[x], args[j]);
             x++;
         }
+
         // Increment j to progress the index
         j++;
+
     }
 
     commandStruct->numberOfArgs = x;
@@ -129,6 +134,7 @@ void printArgs(char **args, int i)
     for (int j=0; j < i; j++)
     {
         printf("%s\n", args[j]);
+        fflush(stdout);
     }
 }
 
@@ -138,9 +144,81 @@ void printCommand(struct userComm* userCommand)
     userCommand->inputFile,
     userCommand->outputFile,
     userCommand->background);
-
+    fflush(stdout);
     printArgs(userCommand->arguments, userCommand->numberOfArgs);
+}
 
+int exitFunction(int pid)
+{
+    // might need to change this to kill the process group
+    kill((-1 * pid), SIGTERM);
+    return 0;
+}
+
+int cdFunction(struct userComm* userCommand)
+{
+    // If there are no args for a cd command. 
+    if (userCommand->numberOfArgs == 0)
+    {
+        // sends us to the directory specified in home.
+        chdir(getenv("HOME"));
+    }
+
+    // Since cd should be passed something like .. or CS344/hudsonsc_program3
+    // we should only have 1 argument
+    else if (userCommand->numberOfArgs == 1)
+    {
+        chdir(userCommand->arguments[0]);
+    }
+
+    else
+    {
+        // cd only takes the one argument, any more and it's incorrect.
+        return 1;
+    }
+
+    return 0;
+}
+
+int statusFunction(struct userComm* userCommand)
+{
+    printf("Hello");
+}
+
+int sleeper()
+{
+    int   childStatus;
+	pid_t childPid = fork();
+
+    if(childPid == -1)
+    {
+        perror("fork() failed!");
+		exit(1);
+    } 
+
+    else if(childPid == 0)
+    {
+    // Child process
+    sleep(1000);
+    } 
+
+    else
+    {
+        printf("Child's pid = %d\n", childPid);
+        childPid = waitpid(childPid, &childStatus, 0);
+        printf("waitpid returned value %d\n", childPid);
+
+        if(WIFEXITED(childStatus))
+        {
+            printf("Child %d exited normally with status %d\n", childPid, WEXITSTATUS(childStatus));
+        } 
+
+        else
+        {
+            printf("Child %d exited abnormally due to signal %d\n", childPid, WTERMSIG(childStatus));
+        }
+    }
+    return 0;
 }
 
 int main()
@@ -162,11 +240,18 @@ int main()
     int size = snprintf( NULL, 0, "%d", pId);
     char* processId = malloc( size + 1 );
     snprintf(processId, size + 1, "%d", pId); 
+    
+    int gpid = getpgrp();
+
 
     do
     {
+        char cwd[256];
+        getcwd(cwd, sizeof(cwd));
         // printf should be okay here since this isn't a signal handler.
+        printf("%s in %s\n", processId, cwd);
         printf(": ");
+        fflush(stdout);
 
         // Read user data
         fgets(userCommand, 2050, stdin);
@@ -200,7 +285,19 @@ int main()
                     replacePId(arguments, i, processId);
                     struct userComm *commandStruct = makeStruct(arguments, i);
                     // printArgs(commandStruct->arguments, i); 
-                    printCommand(commandStruct);               
+                    // printCommand(commandStruct);   
+                    if (strcmp(commandStruct->command, "cd") == 0)
+                    {
+                        cdFunction(commandStruct);
+                    }
+                    else if (strcmp(commandStruct->command, "status") == 0)
+                    {
+                        statusFunction(commandStruct);
+                    }
+                    else if (strcmp(commandStruct->command, "sleep") == 0)
+                    {
+                        sleeper(commandStruct);
+                    }
                 }
             }
         }
@@ -211,6 +308,8 @@ int main()
     } while (strcmp(arguments[0], exitCommand) != 0);
 
     // HERE IS WHERE WE'LL CALL/IMPLEMENT THE EXIT HANDLER.
+    exitFunction(pId);
+
     free(processId);
     return 0;
 }
