@@ -12,6 +12,7 @@ struct userComm
     char *arguments[512];
     char *inputFile;
     char *outputFile;
+    char *background;
 };
 
 void replacePId(char **args, int i, char *pId)
@@ -78,19 +79,17 @@ struct userComm *makeStruct(char **args, int i)
 
     // Allocate space for the command and then assign it.
     commandStruct->command = calloc(strlen(args[j]) + 1, sizeof(char));
-    commandStruct->command = args[j];
+    strcpy(commandStruct->command, args[j]);
     j++;
 
-    while (j != i)
+    while (j < i)
     {
         if (strcmp(args[j], "<") == 0)
         {
             // Since we've hit the indicator for input file we know the next arg is the input file
             j++; // hence, we increment j before assignment.
             commandStruct->inputFile = calloc(strlen(args[j]) + 1, sizeof(char));
-            commandStruct->inputFile = args[j];
-            // Increment again so we don't get a duplicate
-            j++; 
+            strcpy(commandStruct->inputFile, args[j]);
         }
 
         else if (strcmp(args[j], ">") == 0)
@@ -98,9 +97,14 @@ struct userComm *makeStruct(char **args, int i)
             // Same as the input indicator, we know we want to pay attention to the next arg
             j++; // hence, we increment j before assignment.
             commandStruct->outputFile = calloc(strlen(args[j]) + 1, sizeof(char));
-            commandStruct->outputFile = args[j];
-            // Increment again so we don't get a duplicate
-            j++;
+            strcpy(commandStruct->outputFile, args[j]);
+        }
+
+        else if (strcmp(args[j], "&") == 0)
+        {
+            // Same as the input indicator, we know we want to pay attention to the next arg
+            commandStruct->background = calloc(strlen(args[j]) + 1, sizeof(char));
+            strcpy(commandStruct->background, args[j]);
         }
 
         // Since we've already taken the command out, and we know it's not an input or output file
@@ -109,9 +113,10 @@ struct userComm *makeStruct(char **args, int i)
         {
             commandStruct->arguments[x] = calloc(strlen(args[j]) + 1, sizeof(char));
             strcpy(commandStruct->arguments[x], args[j]);
-            j++;
             x++;
         }
+        // Increment j to progress the index
+        j++;
     }
 
 
@@ -128,10 +133,13 @@ void printArgs(char **args, int i)
 
 void printCommand(struct userComm* userCommand, int i)
 {
-    printf("Command: %s\nInput: %s\nOutput: %s\n", userCommand->command,
+    printf("Command: %s\nInput: %s\nOutput: %s\nBackground: %s\n", userCommand->command,
     userCommand->inputFile,
-    userCommand->outputFile);
+    userCommand->outputFile,
+    userCommand->background);
+
     printArgs(userCommand->arguments, i);
+
 }
 
 int main()
