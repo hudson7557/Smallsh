@@ -84,6 +84,14 @@ struct userComm *makeStruct(char **args, int i)
     // Allocate space for the command and then assign it.
     commandStruct->command = calloc(strlen(args[j]) + 1, sizeof(char));
     strcpy(commandStruct->command, args[j]);
+
+    // The original idea behind this struct was to seperate out the command and it's arguments,
+    // However this doesn't work with execvp because it needs the command in the array with the args
+    // so it was added in here. This is what happens when you build the plain as you fly it and 
+    // when you get advice from several TAs. 
+    commandStruct->arguments[x] = calloc(strlen(args[j]) + 1, sizeof(char));
+    strcpy(commandStruct->arguments[x], args[j]);
+    x++;
     j++;
 
     while (j < i)
@@ -104,7 +112,8 @@ struct userComm *makeStruct(char **args, int i)
             strcpy(commandStruct->outputFile, args[j]);
         }
 
-        else if (strcmp(args[j], "&") == 0)
+        // make sure & comes at the end of the string, otherwise it's treated as an argument.
+        else if (strcmp(args[j], "&") == 0 && j == i - 1)
         {
             // Same as the input indicator, we know we want to pay attention to the next arg
             commandStruct->background = calloc(strlen(args[j]) + 1, sizeof(char));
@@ -122,9 +131,9 @@ struct userComm *makeStruct(char **args, int i)
 
         // Increment j to progress the index
         j++;
-
     }
-
+    // Add a null at the end of the array so it works with execvp
+    commandStruct->arguments[x + 1] = NULL;
     commandStruct->numberOfArgs = x;
     return commandStruct;
 }
@@ -182,45 +191,56 @@ int cdFunction(struct userComm* userCommand)
     return 0;
 }
 
-int statusFunction(struct userComm* userCommand)
+int statusFunction(int fgExitValue, int fgTermSignal)
 {
-    
-}
-
-int sleeper()
-{
-    int   childStatus;
-	pid_t childPid = fork();
-
-    if(childPid == -1)
+    // Can print either the exit status or the terminating signal. 
+    if (fgTermSignal == 0)
     {
-        perror("fork() failed!");
-		exit(1);
-    } 
-
-    else if(childPid == 0)
-    {
-    // Child process
-    sleep(1000);
-    } 
-
+        printf("exit value %d\n", fgExitValue);
+    }
     else
     {
-        printf("Child's pid = %d\n", childPid);
-        childPid = waitpid(childPid, &childStatus, 0);
-        printf("waitpid returned value %d\n", childPid);
-
-        if(WIFEXITED(childStatus))
-        {
-            printf("Child %d exited normally with status %d\n", childPid, WEXITSTATUS(childStatus));
-        } 
-
-        else
-        {
-            printf("Child %d exited abnormally due to signal %d\n", childPid, WTERMSIG(childStatus));
-        }
+        printf("terminated by signal %d\n", fgTermSignal);
     }
-    return 0;
+}
+
+/*
+* Adapted from <Stephen Brennan> (<16/01/15>) [<Tutorial - Write a Shell in C>]. https://brennan.io/2015/01/16/write-a-shell-in-c/
+* Used to create child processes and run shell commands such as ls and ps. 
+*/
+
+int spawnChild(struct userComm* userCommand)
+{
+  pid_t pid, wpid;
+  int status;
+
+  pid = fork();
+  if (pid == 0) {
+    // Child process
+    if (execvp(userCommand->command, userCommand->arguments) == -1) 
+    {
+        perror("smallsh");
+    }
+
+    exit(EXIT_FAILURE);
+    }
+
+    else if (pid < 0) 
+    {
+        // Error forking
+        perror("smallsh");
+    }
+    
+    else 
+    {
+    // Parent process
+        do 
+        {
+            wpid = waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+
+  return 1;
 }
 
 int main()
@@ -228,11 +248,18 @@ int main()
     // Reserve space for a command up to 2048 characters long with two extra for newline
     char userCommand[2050];
     char *arguments[513];
-    char buffer[128];
     char exitCommand[] = "exit";
-    char expansion[] = "$$";
     char newLine[] = "\n";
     int i = 0;
+
+    // Allocate memory for tracking exit status of fg processes and initialize it to 0
+    int *fgExitValue; 
+    fgExitValue = (int*)malloc(sizeof(int));
+    *fgExitValue = 0;
+
+    int *fgTermSignal; 
+    fgTermSignal = (int*)malloc(sizeof(int));
+    *fgTermSignal = 0; // Initialize to 0, could be wrong IDK term signals are only like 5 positive numbers.
 
     /* 
     * Adapted from <user2622016> (<09/28/15>) [<post response>]. https://stackoverflow.com/questions/8257714/how-to-convert-an-int-to-string-in-c
@@ -242,8 +269,12 @@ int main()
     int size = snprintf( NULL, 0, "%d", pId);
     char* processId = malloc( size + 1 );
     snprintf(processId, size + 1, "%d", pId); 
-    
     int gpid = getpgrp();
+
+    // Not sure if I need this...
+    int gpidSize = snprintf( NULL, 0, "%d", gpid);
+    char* groupProcessId = malloc( gpidSize + 1 );
+    snprintf(groupProcessId, size + 1, "%d", pId); 
 
 
     do
@@ -288,17 +319,20 @@ int main()
                     struct userComm *commandStruct = makeStruct(arguments, i);
                     // printArgs(commandStruct->arguments, i); 
                     // printCommand(commandStruct);   
+
                     if (strcmp(commandStruct->command, "cd") == 0)
                     {
                         cdFunction(commandStruct);
                     }
+
                     else if (strcmp(commandStruct->command, "status") == 0)
                     {
-                        statusFunction(commandStruct);
+                        statusFunction(*fgExitValue, *fgTermSignal);
                     }
-                    else if (strcmp(commandStruct->command, "sleep") == 0)
+
+                    else
                     {
-                        sleeper(commandStruct);
+                        spawnChild(commandStruct);
                     }
                 }
             }
@@ -313,5 +347,6 @@ int main()
     exitFunction(pId);
 
     free(processId);
+    free(fgExitValue);
     return 0;
 }
