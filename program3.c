@@ -216,24 +216,26 @@ int spawnChild(struct userComm* userCommand)
 
   pid = fork();
   if (pid == 0) {
-    // Child process
+    // Create the child process
     if (execvp(userCommand->command, userCommand->arguments) == -1) 
     {
+        // If the child process fails we print the error with smallsh so it's clear
+        // where the error is coming from.
         perror("smallsh");
     }
-
+    // Clean up.
     exit(EXIT_FAILURE);
     }
 
     else if (pid < 0) 
     {
-        // Error forking
+        // If the fork failed we display an error message along with the program title
         perror("smallsh");
     }
     
     else 
     {
-    // Parent process
+    // Parent process will wait until we're good to go forward. 
         do 
         {
             wpid = waitpid(pid, &status, WUNTRACED);
