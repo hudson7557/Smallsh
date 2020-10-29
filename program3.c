@@ -169,7 +169,7 @@ int exitFunction(int pid)
 int cdFunction(struct userComm* userCommand)
 {
     // If there are no args for a cd command. 
-    if (userCommand->numberOfArgs == 0)
+    if (userCommand->numberOfArgs == 1)
     {
         // sends us to the directory specified in home.
         chdir(getenv("HOME"));
@@ -177,9 +177,9 @@ int cdFunction(struct userComm* userCommand)
 
     // Since cd should be passed something like .. or CS344/hudsonsc_program3
     // we should only have 1 argument
-    else if (userCommand->numberOfArgs == 1)
+    else if (userCommand->numberOfArgs == 2)
     {
-        chdir(userCommand->arguments[0]);
+        chdir(userCommand->arguments[1]);
     }
 
     else
@@ -222,6 +222,7 @@ int spawnChild(struct userComm* userCommand)
         // If the child process fails we print the error with smallsh so it's clear
         // where the error is coming from.
         perror("smallsh");
+        fflush(stdout);
     }
     // Clean up.
     exit(EXIT_FAILURE);
@@ -231,6 +232,7 @@ int spawnChild(struct userComm* userCommand)
     {
         // If the fork failed we display an error message along with the program title
         perror("smallsh");
+        fflush(stdout);
     }
     
     else 
