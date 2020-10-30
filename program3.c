@@ -2,7 +2,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -91,6 +93,14 @@ struct userComm *makeStruct(char **args, int i)
     // when you get advice from several TAs. 
     commandStruct->arguments[x] = calloc(strlen(args[j]) + 1, sizeof(char));
     strcpy(commandStruct->arguments[x], args[j]);
+
+    // Initialize input and output file to contain an empty string. 
+    // This allows us to check if they got assigned and handle it accordingly.
+    commandStruct->outputFile = calloc(strlen("") + 1, sizeof(char));
+    strcpy(commandStruct->outputFile, "");
+
+    commandStruct->inputFile = calloc(strlen("") + 1, sizeof(char));
+    strcpy(commandStruct->inputFile, "");
     x++;
     j++;
 
@@ -100,6 +110,7 @@ struct userComm *makeStruct(char **args, int i)
         {
             // Since we've hit the indicator for input file we know the next arg is the input file
             j++; // hence, we increment j before assignment.
+            free(commandStruct->inputFile); // Deallocte, reallocate
             commandStruct->inputFile = calloc(strlen(args[j]) + 1, sizeof(char));
             strcpy(commandStruct->inputFile, args[j]);
         }
@@ -108,6 +119,7 @@ struct userComm *makeStruct(char **args, int i)
         {
             // Same as the input indicator, we know we want to pay attention to the next arg
             j++; // hence, we increment j before assignment.
+            free(commandStruct->outputFile); // Deallocte, reallocate
             commandStruct->outputFile = calloc(strlen(args[j]) + 1, sizeof(char));
             strcpy(commandStruct->outputFile, args[j]);
         }
@@ -135,6 +147,7 @@ struct userComm *makeStruct(char **args, int i)
     // Add a null at the end of the array so it works with execvp
     commandStruct->arguments[x + 1] = NULL;
     commandStruct->numberOfArgs = x;
+
     return commandStruct;
 }
 
@@ -209,14 +222,74 @@ int statusFunction(int fgExitValue, int fgTermSignal)
 * Used to create child processes and run shell commands such as ls and ps. 
 */
 
-int spawnChild(struct userComm* userCommand)
+int spawnChild(struct userComm* userCommand, int *startedProcesses, int *index)
 {
-  pid_t pid, wpid;
-  int status;
+    int status;
 
-  pid = fork();
-  if (pid == 0) {
-    // Create the child process
+    pid_t pid = fork();
+    //startedProcesses[(*index)] = pid; // Assign the pid to the array storing the values.
+    //(*index)++; // Increment the process index to
+  
+    if (pid == 0) {
+    /*
+    * Adapted from <CS 702 - Operating Systems> (<Spring 2005>) [<Using dup2 for I/O Redirection and Pipes>] <.shttp://www.cs.loyola.edu/~jglenn/702/S2005/Examples/dup2.html
+    * to get the general structure of using dup2() for I/O redirection. 
+    */ 
+
+    // Since we initalize input to an empty string, if it isn't assigned something else it will 
+    // still be an empty string.
+    if (strcmp(userCommand->inputFile, "") != 0)
+    {
+        // Copy the outputFile name into a temp var to avoid intermitent issues with name being undefined.
+        char *tempIn;
+        tempIn = malloc(sizeof(userCommand->inputFile) * sizeof(char));
+        strcpy(tempIn, userCommand->inputFile);
+
+        // open the file for write only, set permissions.
+        int in = open(tempIn, O_RDONLY );
+
+        if (in < 0) 
+        {
+            perror("smallsh");
+            exit(1);
+        }
+
+        // dup2 redirects stdin from our file 
+        dup2(in, 0);
+
+        // Close our file since we no longer need it. 
+        close(in);
+
+    }
+
+    // Since we initalize output to an empty string, if it isn't assigned something else it will 
+    // still be an empty string.
+    if (strcmp(userCommand->outputFile, "") != 0)
+    {
+        // Copy the outputFile name into a temp var to avoid intermitent issues with name being undefined.
+        char *tempOut;
+        tempOut = malloc(sizeof(userCommand->outputFile) * sizeof(char));
+        strcpy(tempOut, userCommand->outputFile);
+
+        // open the file for write only, set permissions.
+        int out = open(tempOut, O_WRONLY | O_CREAT | O_TRUNC, 0640 );
+        
+        if(out < 0) 
+        {
+            perror("smallsh");
+            exit(1);
+        }
+
+
+        // dup2 redirects stdout to our out file 
+        dup2(out, 1);
+
+        // Close our file since we no longer need it. 
+        close(out);
+    }
+
+
+    // Check if the input file is present
     if (execvp(userCommand->command, userCommand->arguments) == -1) 
     {
         // If the child process fails we print the error with smallsh so it's clear
@@ -224,7 +297,7 @@ int spawnChild(struct userComm* userCommand)
         perror("smallsh");
         fflush(stdout);
     }
-    // Clean up.
+
     exit(EXIT_FAILURE);
     }
 
@@ -240,11 +313,11 @@ int spawnChild(struct userComm* userCommand)
     // Parent process will wait until we're good to go forward. 
         do 
         {
-            wpid = waitpid(pid, &status, WUNTRACED);
+            pid_t wpid = waitpid(pid, &status, WUNTRACED);
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }
 
-  return 1;
+  return 0;
 }
 
 int main()
@@ -256,7 +329,11 @@ int main()
     char newLine[] = "\n";
     int i = 0;
 
+    int startedProcesses[100]; // Fuck it. 
+    int startedProcessIndex = 0;
+
     // Allocate memory for tracking exit status of fg processes and initialize it to 0
+    // PROBS GET RID OF THIS
     int *fgExitValue; 
     fgExitValue = (int*)malloc(sizeof(int));
     *fgExitValue = 0;
@@ -336,7 +413,7 @@ int main()
 
                     else
                     {
-                        spawnChild(commandStruct);
+                        spawnChild(commandStruct, startedProcesses, &startedProcessIndex);
                     }
                 }
             }
