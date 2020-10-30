@@ -222,14 +222,16 @@ int statusFunction(int fgExitValue, int fgTermSignal)
 * Used to create child processes and run shell commands such as ls and ps. 
 */
 
-int spawnChild(struct userComm* userCommand, int *startedProcesses, int *index)
+int spawnChild(struct userComm* userCommand, pid_t *processTracker)
 {
     pid_t pid, wpid;
     int status;
+    int i = 0;
 
     pid = fork();
-    startedProcesses[(*index)] = pid; // Assign the pid to the array storing the values.
-    (*index)++; // Increment the process index to
+    processTracker[i] = pid;
+    i++;
+    printf("%d, %d\n", processTracker[i], pid);
   
     if (pid == 0) {
     /*
@@ -330,8 +332,7 @@ int main()
     char newLine[] = "\n";
     int i = 0;
 
-    int startedProcesses[100]; // Fuck it. 
-    int startedProcessIndex = 0;
+    pid_t* bgProcesses = malloc( sizeof(pid_t) * 100);
 
     // Allocate memory for tracking exit status of fg processes and initialize it to 0
     // PROBS GET RID OF THIS
@@ -361,10 +362,7 @@ int main()
 
     do
     {
-        // char cwd[256];
-        // getcwd(cwd, sizeof(cwd));
         // printf should be okay here since this isn't a signal handler.
-        // printf("%s in %s\n", processId, cwd);
         printf(": ");
         fflush(stdout);
 
@@ -414,8 +412,7 @@ int main()
 
                     else
                     {
-                        spawnChild(commandStruct, startedProcesses, &startedProcessIndex);
-                        printf("%d\n %d\n", startedProcessIndex, startedProcesses[startedProcessIndex]);
+                        spawnChild(commandStruct, bgProcesses);
                     }
                 }
             }
