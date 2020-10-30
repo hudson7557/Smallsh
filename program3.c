@@ -224,11 +224,12 @@ int statusFunction(int fgExitValue, int fgTermSignal)
 
 int spawnChild(struct userComm* userCommand, int *startedProcesses, int *index)
 {
+    pid_t pid, wpid;
     int status;
 
-    pid_t pid = fork();
-    //startedProcesses[(*index)] = pid; // Assign the pid to the array storing the values.
-    //(*index)++; // Increment the process index to
+    pid = fork();
+    startedProcesses[(*index)] = pid; // Assign the pid to the array storing the values.
+    (*index)++; // Increment the process index to
   
     if (pid == 0) {
     /*
@@ -313,7 +314,7 @@ int spawnChild(struct userComm* userCommand, int *startedProcesses, int *index)
     // Parent process will wait until we're good to go forward. 
         do 
         {
-            pid_t wpid = waitpid(pid, &status, WUNTRACED);
+            wpid = waitpid(pid, &status, WUNTRACED);
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }
 
@@ -414,6 +415,7 @@ int main()
                     else
                     {
                         spawnChild(commandStruct, startedProcesses, &startedProcessIndex);
+                        printf("%d\n %d\n", startedProcessIndex, startedProcesses[startedProcessIndex]);
                     }
                 }
             }
