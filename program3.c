@@ -19,80 +19,84 @@ struct userComm
     char *background;
 };
 
-void replacePId(char **args, int i, char *pId)
+
+/*
+* This function searches through the commands arguments for the $$ character,
+* if $$ is found it is replaced with the programs pid.
+*/
+void replaceCharacters(char **args, int argCount, char *pId)
 {
     // For loop to loop through the args
-    for (int x=0; x < i; x++)
+    for (int x=0; x < argCount; x++)
     {
         int argLength = strlen(args[x]);
         int pIdLength = strlen(pId);
-        int totalLength = argLength + pIdLength;
+        int expandedArgumentLength = argLength + pIdLength;
 
         // Create variables to hold our strings. 
-        char *array = calloc( totalLength + 2, sizeof(char));
-        char myVar[argLength];
+        char *expandedString = calloc( expandedArgumentLength + 2, sizeof(char));
+        char originalString[argLength];
 
         // we copy over the argument to allow us to access it through subscript
-        strcpy(myVar, args[x]);
+        strcpy(originalString, args[x]);
 
         /*
         * Adapted from <StackOverFlow> (<12/18x/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
         * This was used to get individual characters so that I can check for "$$".
         */
 
-        char* s;
+        char* stringAddress;
         // We use two seperate indexes to account for the possible difference when expansion occurs.
-        int q = 0;
-        int r = 0;
+        int arrayIndex = 0;
+        int stringIndex = 0;
 
-        // Loop through the string, the first character is removed on each iteration
+        // Loop through the string, the first character is excluded on each iteration
         // and the first two characters are evaluated for whether they are $$.
-        for ( s=&myVar[0]; *s != '\0'; s++ )
+        for ( stringAddress=&originalString[0]; *stringAddress != '\0'; stringAddress++ )
         {   
-            if (strncmp(s, "$$", 2) == 0)
+            if (strncmp(stringAddress, "$$", 2) == 0)
             {
                 // If the first two characters of the substring are $$ we concatenated the pId into our array
-                strcat(array, pId);
-                s++; // Increment s again so we don't look at the second $
+                strcat(expandedString, pId);
+                stringAddress++; // Increment s again so we don't look at the second $
 
-                // q is our index for the array, which we increment as much as needed for the pId
-                q = q + pIdLength;
+                // arrayIndex is our index for the array, which we increment as much as needed for the pId
+                arrayIndex = arrayIndex + pIdLength;
 
                 // r is our index for the "string", we increment it twice to skip copying the $$
-                r = r + 2;
+                stringIndex = stringIndex + 2;
             }
 
             else
             {
                 // if the $$ character is not found we assign an index and increment our pointers. 
-                array[q] = myVar[r];
-                q++;
-                r++;
+                expandedString[arrayIndex] = originalString[stringIndex];
+                arrayIndex++;
+                stringIndex++;
             }
 
         }
         // We conclude by reassigning the variable.
-        args[x] = array;
-
+        args[x] = expandedString;
     }
 }
 
-struct userComm *makeStruct(char **args, int i)
+struct userComm *makeStruct(char **args, int argCount)
 {
-    int j = 0;
-    int x = 0;
+    int inputArrayIndex = 0;
+    int argArrayIndex = 0;
     struct userComm *commandStruct = malloc(sizeof(struct userComm)); 
 
     // Allocate space for the command and then assign it.
-    commandStruct->command = calloc(strlen(args[j]) + 1, sizeof(char));
-    strcpy(commandStruct->command, args[j]);
+    commandStruct->command = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
+    strcpy(commandStruct->command, args[inputArrayIndex]);
 
     // The original idea behind this struct was to seperate out the command and it's arguments,
     // However this doesn't work with execvp because it needs the command in the array with the args
     // so it was added in here. This is what happens when you build the plain as you fly it and 
     // when you get advice from several TAs. 
-    commandStruct->arguments[x] = calloc(strlen(args[j]) + 1, sizeof(char));
-    strcpy(commandStruct->arguments[x], args[j]);
+    commandStruct->arguments[argArrayIndex] = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
+    strcpy(commandStruct->arguments[argArrayIndex], args[inputArrayIndex]);
 
     // Initialize input and output file to contain an empty string. 
     // This allows us to check if they got assigned and handle it accordingly.
@@ -101,52 +105,52 @@ struct userComm *makeStruct(char **args, int i)
 
     commandStruct->inputFile = calloc(strlen("") + 1, sizeof(char));
     strcpy(commandStruct->inputFile, "");
-    x++;
-    j++;
+    argArrayIndex++;
+    inputArrayIndex++;
 
-    while (j < i)
+    while (inputArrayIndex < argCount)
     {
-        if (strcmp(args[j], "<") == 0)
+        if (strcmp(args[inputArrayIndex], "<") == 0)
         {
             // Since we've hit the indicator for input file we know the next arg is the input file
-            j++; // hence, we increment j before assignment.
+            inputArrayIndex++; // hence, we increment j before assignment.
             free(commandStruct->inputFile); // Deallocte, reallocate
-            commandStruct->inputFile = calloc(strlen(args[j]) + 1, sizeof(char));
-            strcpy(commandStruct->inputFile, args[j]);
+            commandStruct->inputFile = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
+            strcpy(commandStruct->inputFile, args[inputArrayIndex]);
         }
 
-        else if (strcmp(args[j], ">") == 0)
+        else if (strcmp(args[inputArrayIndex], ">") == 0)
         {
             // Same as the input indicator, we know we want to pay attention to the next arg
-            j++; // hence, we increment j before assignment.
+            inputArrayIndex++; // hence, we increment j before assignment.
             free(commandStruct->outputFile); // Deallocte, reallocate
-            commandStruct->outputFile = calloc(strlen(args[j]) + 1, sizeof(char));
-            strcpy(commandStruct->outputFile, args[j]);
+            commandStruct->outputFile = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
+            strcpy(commandStruct->outputFile, args[inputArrayIndex]);
         }
 
         // make sure & comes at the end of the string, otherwise it's treated as an argument.
-        else if (strcmp(args[j], "&") == 0 && j == i - 1)
+        else if (strcmp(args[inputArrayIndex], "&") == 0 && inputArrayIndex == argArrayIndex - 1)
         {
             // Same as the input indicator, we know we want to pay attention to the next arg
-            commandStruct->background = calloc(strlen(args[j]) + 1, sizeof(char));
-            strcpy(commandStruct->background, args[j]);
+            commandStruct->background = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
+            strcpy(commandStruct->background, args[inputArrayIndex]);
         }
 
         // Since we've already taken the command out, and we know it's not an input or output file
         // We know it's an argument for the command and assign it as such. 
         else
         {
-            commandStruct->arguments[x] = calloc(strlen(args[j]) + 1, sizeof(char));
-            strcpy(commandStruct->arguments[x], args[j]);
-            x++;
+            commandStruct->arguments[argArrayIndex] = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
+            strcpy(commandStruct->arguments[argArrayIndex], args[inputArrayIndex]);
+            argArrayIndex++;
         }
 
         // Increment j to progress the index
-        j++;
+        inputArrayIndex++;
     }
     // Add a null at the end of the array so it works with execvp
-    commandStruct->arguments[x + 1] = NULL;
-    commandStruct->numberOfArgs = x;
+    commandStruct->arguments[argArrayIndex + 1] = NULL;
+    commandStruct->numberOfArgs = argArrayIndex;
 
     return commandStruct;
 }
@@ -204,7 +208,7 @@ int cdFunction(struct userComm* userCommand)
     return 0;
 }
 
-int statusFunction(int fgExitValue, int fgTermSignal)
+int displayStatus(int fgExitValue, int fgTermSignal)
 {
     // Can print either the exit status or the terminating signal. 
     if (fgTermSignal == 0)
@@ -215,6 +219,7 @@ int statusFunction(int fgExitValue, int fgTermSignal)
     {
         printf("terminated by signal %d\n", fgTermSignal);
     }
+    return 0;
 }
 
 /*
@@ -374,7 +379,6 @@ int main()
         
             // Process the command
             char *ptr;
-            char *secondPtr;
             char *token = strtok_r(userCommand, " ", &ptr); 
             
             arguments[i] = token;
@@ -395,19 +399,19 @@ int main()
                 // Also make sure it's not an exit command because we don't want to mess with that.
                 if (strcmp(arguments[0], exitCommand) != 0)
                 {
-                    replacePId(arguments, i, processId);
+                    replaceCharacters(arguments, i, processId);
                     struct userComm *commandStruct = makeStruct(arguments, i);
                     // printArgs(commandStruct->arguments, i); 
                     // printCommand(commandStruct);   
 
-                    if (strcmp(commandStruct->command, "cd") == 0)
+                    if (strcmp(commandStruct->arguments[0], "cd") == 0)
                     {
                         cdFunction(commandStruct);
                     }
 
-                    else if (strcmp(commandStruct->command, "status") == 0)
+                    else if (strcmp(commandStruct->arguments[0], "status") == 0)
                     {
-                        statusFunction(*fgExitValue, *fgTermSignal);
+                        displayStatus(*fgExitValue, *fgTermSignal);
                     }
 
                     else
