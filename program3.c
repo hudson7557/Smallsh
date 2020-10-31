@@ -11,7 +11,6 @@
 
 struct userComm
 {
-    char *command;
     char *arguments[512];
     int numberOfArgs;
     char *inputFile;
@@ -41,8 +40,9 @@ void replaceCharacters(char **args, int argCount, char *pId)
         strcpy(originalString, args[x]);
 
         /*
-        * Adapted from <StackOverFlow> (<12/18x/10>) <user257111>[<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
-        * This was used to get individual characters so that I can check for "$$".
+        * The loop to search through a string was adapted from <StackOverFlow> (<12/18x/10>) <user257111> 
+        * [<answer to a question>]. https://stackoverflow.com/questions/4475948/get-a-character-referenced-by-index-in-a-c-string
+        * This was used to get portions of the string so that I can check for "$$".
         */
 
         char* stringAddress;
@@ -81,32 +81,22 @@ void replaceCharacters(char **args, int argCount, char *pId)
     }
 }
 
-struct userComm *makeStruct(char **args, int argCount)
+struct userComm *makeCommandStruct(char **args, int argCount)
 {
     int inputArrayIndex = 0;
     int argArrayIndex = 0;
     struct userComm *commandStruct = malloc(sizeof(struct userComm)); 
 
-    // Allocate space for the command and then assign it.
-    commandStruct->command = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
-    strcpy(commandStruct->command, args[inputArrayIndex]);
-
-    // The original idea behind this struct was to seperate out the command and it's arguments,
-    // However this doesn't work with execvp because it needs the command in the array with the args
-    // so it was added in here. This is what happens when you build the plain as you fly it and 
-    // when you get advice from several TAs. 
-    commandStruct->arguments[argArrayIndex] = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
-    strcpy(commandStruct->arguments[argArrayIndex], args[inputArrayIndex]);
-
-    // Initialize input and output file to contain an empty string. 
+    // Initialize input, output, and background to contain an empty string. 
     // This allows us to check if they got assigned and handle it accordingly.
     commandStruct->outputFile = calloc(strlen("") + 1, sizeof(char));
     strcpy(commandStruct->outputFile, "");
 
     commandStruct->inputFile = calloc(strlen("") + 1, sizeof(char));
     strcpy(commandStruct->inputFile, "");
-    argArrayIndex++;
-    inputArrayIndex++;
+
+    commandStruct->background = calloc(strlen("") + 1, sizeof(char));
+    strcpy(commandStruct->inputFile, "");
 
     while (inputArrayIndex < argCount)
     {
@@ -155,19 +145,18 @@ struct userComm *makeStruct(char **args, int argCount)
     return commandStruct;
 }
 
-void printArgs(char **args, int i)
+void printArgs(char **args, int argCount)
 {
-    for (int j=0; j < i; j++)
+    for (int currentIndex=0; currentIndex < argCount; currentIndex++)
     {
-        printf("%s\n", args[j]);
+        printf("%s\n", args[currentIndex]);
         fflush(stdout);
     }
 }
 
 void printCommand(struct userComm* userCommand)
 {
-    printf("Command: %s\nInput: %s\nOutput: %s\nBackground: %s\n", userCommand->command,
-    userCommand->inputFile,
+    printf("Input: %s\nOutput: %s\nBackground: %s\n", userCommand->inputFile,
     userCommand->outputFile,
     userCommand->background);
     fflush(stdout);
@@ -298,7 +287,7 @@ int spawnChild(struct userComm* userCommand, pid_t *processTracker)
 
 
     // Check if the input file is present
-    if (execvp(userCommand->command, userCommand->arguments) == -1) 
+    if (execvp(userCommand->arguments[0], userCommand->arguments) == -1) 
     {
         // If the child process fails we print the error with smallsh so it's clear
         // where the error is coming from.
@@ -400,7 +389,7 @@ int main()
                 if (strcmp(arguments[0], exitCommand) != 0)
                 {
                     replaceCharacters(arguments, i, processId);
-                    struct userComm *commandStruct = makeStruct(arguments, i);
+                    struct userComm *commandStruct = makeCommandStruct(arguments, i);
                     // printArgs(commandStruct->arguments, i); 
                     // printCommand(commandStruct);   
 
