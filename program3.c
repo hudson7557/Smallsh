@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
 
 
 struct userComm
@@ -17,7 +18,6 @@ struct userComm
     char *outputFile;
     char *background;
 };
-
 
 /*
 * This function searches through the commands arguments for the $$ character,
@@ -63,7 +63,7 @@ void replaceCharacters(char **args, int argCount, char *pId)
                 // arrayIndex is our index for the array, which we increment as much as needed for the pId
                 arrayIndex = arrayIndex + pIdLength;
 
-                // r is our index for the "string", we increment it twice to skip copying the $$
+                // We increment our string index twice to skip copying the $$
                 stringIndex = stringIndex + 2;
             }
 
@@ -145,6 +145,13 @@ struct userComm *makeCommandStruct(char **args, int argCount)
     return commandStruct;
 }
 
+void sigintHandler (int signum)
+{
+    char* message = "Terminated by signal 2\n";
+    write(STDOUT_FILENO, message, 23);
+    fflush(stdout);
+}
+
 void printArgs(char **args, int argCount)
 {
     for (int currentIndex=0; currentIndex < argCount; currentIndex++)
@@ -163,18 +170,19 @@ void printCommand(struct userComm* userCommand)
     printArgs(userCommand->arguments, userCommand->numberOfArgs);
 }
 
-int exitFunction(int pid)
+int exitFunction(int pgid)
 {
     // might need to change this to kill the process group
     // if so simply swith -2 to processGroupId.
-    int processGroupId = -1 * pid;
+    int processGroupId = -1 * pgid;
     kill(-2 , SIGTERM);
     return 0;
 }
 
 int cdFunction(struct userComm* userCommand)
 {
-    // If there are no args for a cd command. 
+    // We know that the command will be the first index in our arguments. If there is only one we know
+    // there are no args for a cd command and we call it on HOME. 
     if (userCommand->numberOfArgs == 1)
     {
         // sends us to the directory specified in home.
@@ -182,7 +190,7 @@ int cdFunction(struct userComm* userCommand)
     }
 
     // Since cd should be passed something like .. or CS344/hudsonsc_program3
-    // we should only have 1 argument
+    // we should only have 1 argument.
     else if (userCommand->numberOfArgs == 2)
     {
         chdir(userCommand->arguments[1]);
@@ -216,22 +224,23 @@ int displayStatus(int fgExitValue, int fgTermSignal)
 * Used to create child processes and run shell commands such as ls and ps. 
 */
 
-int spawnChild(struct userComm* userCommand, pid_t *processTracker)
+int spawnChild(struct userComm* userCommand, struct sigaction signal )
 {
     pid_t pid, wpid;
     int status;
     int i = 0;
 
     pid = fork();
-    processTracker[i] = pid;
-    i++;
-    printf("%d, %d\n", processTracker[i], pid);
   
     if (pid == 0) {
     /*
-    * Adapted from <CS 702 - Operating Systems> (<Spring 2005>) [<Using dup2 for I/O Redirection and Pipes>] <.shttp://www.cs.loyola.edu/~jglenn/702/S2005/Examples/dup2.html
+    * dup2() calls adapted from <CS 702 - Operating Systems> (<Spring 2005>) [<Using dup2 for I/O Redirection and Pipes>] <.shttp://www.cs.loyola.edu/~jglenn/702/S2005/Examples/dup2.html
     * to get the general structure of using dup2() for I/O redirection. 
     */ 
+
+    // When we fork the child inherets the environment, so we need to reset the default action of control c.
+    signal.sa_handler = sigintHandler;
+    sigaction(SIGINT, &signal, NULL);
 
     // Since we initalize input to an empty string, if it isn't assigned something else it will 
     // still be an empty string.
@@ -285,7 +294,6 @@ int spawnChild(struct userComm* userCommand, pid_t *processTracker)
         close(out);
     }
 
-
     // Check if the input file is present
     if (execvp(userCommand->arguments[0], userCommand->arguments) == -1) 
     {
@@ -328,6 +336,20 @@ int main()
 
     pid_t* bgProcesses = malloc( sizeof(pid_t) * 100);
 
+    /* 
+    * Adpated from <CS344> (<Exploration: Signal Handling API>) https://canvas.oregonstate.edu/courses/1784217/pages/exploration-signal-handling-api?module_item_id=19893105
+    * to make the parent process ignore sigint and sigstp
+    */
+    struct sigaction ignore = {0};
+    ignore.sa_handler = SIG_IGN;
+   	sigaction(SIGINT, &ignore, NULL);
+
+    struct sigaction stop_handler = {0};
+    stop_handler.sa_handler = SIG_IGN;
+
+
+
+
     // Allocate memory for tracking exit status of fg processes and initialize it to 0
     // PROBS GET RID OF THIS
     int *fgExitValue; 
@@ -336,7 +358,7 @@ int main()
 
     int *fgTermSignal; 
     fgTermSignal = (int*)malloc(sizeof(int));
-    *fgTermSignal = 0; // Initialize to 0, could be wrong IDK term signals are only like 5 positive numbers.
+    *fgTermSignal = 0; // Initialize to 0, could be wrong IDK term signals are only like 5 positive numbers?
 
     /* 
     * Adapted from <user2622016> (<09/28/15>) [<post response>]. https://stackoverflow.com/questions/8257714/how-to-convert-an-int-to-string-in-c
@@ -360,8 +382,14 @@ int main()
         printf(": ");
         fflush(stdout);
 
+        // This was a unique bug in my control structure. If a user inputs ctrl-c arguments 0 is never assigned because
+        // nothing was read in. As such, it would crash when the while condition evaluated. To get around this we just give
+        // it a blank line to initialize the value. 
+        arguments[0] = "";
+
         // Read user data
         fgets(userCommand, 2050, stdin);
+        // ISSUE OCCURS HERE, IT'S BEING READ IN TO THE STRCMP. 
         if (strcmp(userCommand, newLine) != 0)
         {
             userCommand[strcspn(userCommand, "\n")] = 0;
@@ -405,7 +433,7 @@ int main()
 
                     else
                     {
-                        spawnChild(commandStruct, bgProcesses);
+                        spawnChild(commandStruct, ignore);
                     }
                 }
             }
@@ -413,6 +441,8 @@ int main()
 
         // reset i after each iteration
         i = 0;
+
+
 
     } while (strcmp(arguments[0], exitCommand) != 0);
 
