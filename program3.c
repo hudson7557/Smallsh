@@ -222,7 +222,7 @@ int cdFunction(struct userComm* userCommand)
     return 0;
 }
 
-void displayStatus()
+void displayForegroundStatus()
 {
     // Prints the exit status of the most recently run foreground process.
     printf("exit value %d\n", fgStatus);
@@ -380,7 +380,6 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
             {
                 wpid = waitpid(pid, &fgStatus, WUNTRACED);
             } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
-            fgStatus = status; 
         }
     }
 
@@ -407,16 +406,6 @@ int main()
     struct sigaction stop_handler = {0};
     stop_handler.sa_handler = SIG_IGN;
 
-    // Allocate memory for tracking exit status of fg processes and initialize it to 0
-    // PROBS GET RID OF THIS
-    int *fgExitValue; 
-    fgExitValue = (int*)malloc(sizeof(int));
-    *fgExitValue = 0;
-
-    int *fgTermSignal; 
-    fgTermSignal = (int*)malloc(sizeof(int));
-    *fgTermSignal = 0; // Initialize to 0, could be wrong IDK term signals are only like 5 positive numbers?
-
     /* 
     * Adapted from <user2622016> (<09/28/15>) [<post response>]. https://stackoverflow.com/questions/8257714/how-to-convert-an-int-to-string-in-c
     * Used to change the pid int to a string so it can be concatenated if $$ is present.
@@ -433,7 +422,7 @@ int main()
         if (backgroundProcessCount != 0)
         {
             int completedId = waitpid(-1, &bgStatus, WNOHANG);
-            if (completedId != 0)
+            if (completedId > 0)
             {
                 printf("background pid %d is done: ", completedId);
                 displayBackgroundStatus();
@@ -490,7 +479,7 @@ int main()
 
                     else if (strcmp(commandStruct->arguments[0], "status") == 0)
                     {
-                        displayStatus(*fgExitValue, *fgTermSignal);
+                        displayForegroundStatus();
                     }
 
                     else
@@ -510,6 +499,5 @@ int main()
     exitFunction(pId);
 
     free(processId);
-    free(fgExitValue);
     return 0;
 }
