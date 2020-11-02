@@ -12,6 +12,10 @@
 int backgroundProcesses[100];
 int backgroundProcessCount = 0;
 
+int foregroundOnly = 0;
+int fgStatus = 0;
+int bgStatus;
+
 struct userComm
 {
     char *arguments[512];
@@ -154,11 +158,11 @@ void sigintHandler (int signum)
     fflush(stdout);
 }
 
-void displayBackgroundProcesses(int args[], int argCount)
+void displayBackgroundProcesses()
 {
-    for (int currentIndex=0; currentIndex < argCount; currentIndex++)
+    for (int currentIndex=0; currentIndex < backgroundProcessCount; currentIndex++)
     {
-        printf("%s\n", args[currentIndex]);
+        printf("%d\n", backgroundProcesses[currentIndex]);
         fflush(stdout);
     }
 }
@@ -181,13 +185,15 @@ void printCommand(struct userComm* userCommand)
     printArgs(userCommand->arguments, userCommand->numberOfArgs);
 }
 
-int exitFunction(int pgid)
+void exitFunction()
 {
-    // might need to change this to kill the process group
-    // if so simply swith -2 to processGroupId.
-    int processGroupId = -1 * pgid;
-    kill(-2 , SIGTERM);
-    return 0;
+    for ( int index = 0; index < backgroundProcessCount; index++)
+    {
+        kill(backgroundProcesses[index] , SIGTERM);
+        // Why does sigterm show up? 
+
+    }
+
 }
 
 int cdFunction(struct userComm* userCommand)
@@ -216,18 +222,16 @@ int cdFunction(struct userComm* userCommand)
     return 0;
 }
 
-int displayStatus(int fgExitValue, int fgTermSignal)
+void displayStatus()
 {
-    // Can print either the exit status or the terminating signal. 
-    if (fgTermSignal == 0)
-    {
-        printf("exit value %d\n", fgExitValue);
-    }
-    else
-    {
-        printf("terminated by signal %d\n", fgTermSignal);
-    }
-    return 0;
+    // Prints the exit status of the most recently run foreground process.
+    printf("exit value %d\n", fgStatus);
+}
+
+void displayBackgroundStatus()
+{
+    // Prints the exit status of the most recently run foreground process.
+    printf("exit value %d\n", bgStatus);
 }
 
 /*
@@ -305,6 +309,24 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
         close(out);
     }
 
+    // If it's a background process and the output file hasn't been set.
+    if (strcmp(userCommand->background, "&") == 0 && strcmp(userCommand->inputFile, "") == 0)
+    {
+        // dup2 redirects stdin to /dev/null
+        int in = open("/dev/null", O_RDONLY);
+        dup2(in, 0);
+        close(in);
+    }
+
+    // If it's a background process and the output file hasn't been set.
+    if (strcmp(userCommand->background, "&") == 0 && strcmp(userCommand->outputFile, "") == 0)
+    {
+        // dup2 redirects stdout to /dev/null
+        int out = open("/dev/null", O_WRONLY);
+        dup2(out, 1);
+        close(out);
+    }
+
     // Check if the input file is present
     if (execvp(userCommand->arguments[0], userCommand->arguments) == -1) 
     {
@@ -326,16 +348,14 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
     
     else 
     {
-    // Parent process will wait until we're good to go forward. 
 
-
+        // Determine whether the process is foreground or background
         if (strcmp(userCommand->background, "&") == 0)
         {
-            cpid = waitpid (pid, &status, WNOHANG);
+            cpid = waitpid(pid, &bgStatus, WNOHANG);
             // Assign cpid to the cpid traker array
             backgroundProcesses[backgroundProcessCount] = cpid;
             backgroundProcessCount++;
-
 
             char message[30] = "background pid is ";
             // convert cpid to text so I can have it printed out. 
@@ -358,8 +378,9 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
         {
             do 
             {
-                wpid = waitpid(pid, &status, WUNTRACED);
-            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+                wpid = waitpid(pid, &fgStatus, WUNTRACED);
+            } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
+            fgStatus = status; 
         }
     }
 
@@ -386,9 +407,6 @@ int main()
     struct sigaction stop_handler = {0};
     stop_handler.sa_handler = SIG_IGN;
 
-
-
-
     // Allocate memory for tracking exit status of fg processes and initialize it to 0
     // PROBS GET RID OF THIS
     int *fgExitValue; 
@@ -409,14 +427,19 @@ int main()
     snprintf(processId, size + 1, "%d", pId); 
     int gpid = getpgrp();
 
-    // Not sure if I need this...
-    int gpidSize = snprintf( NULL, 0, "%d", gpid);
-    char* groupProcessId = malloc( gpidSize + 1 );
-    snprintf(groupProcessId, gpidSize + 1, "%d", pId); 
-
-
     do
     {
+        // Check to see if a background process has completed here.
+        if (backgroundProcessCount != 0)
+        {
+            int completedId = waitpid(-1, &bgStatus, WNOHANG);
+            if (completedId != 0)
+            {
+                printf("background pid %d is done: ", completedId);
+                displayBackgroundStatus();
+            }
+        }
+        
         // printf should be okay here since this isn't a signal handler.
         printf(": ");
         fflush(stdout);
@@ -457,7 +480,7 @@ int main()
                 {
                     replaceCharacters(arguments, i, processId);
                     struct userComm *commandStruct = makeCommandStruct(arguments, i);
-                    displayBackgroundProcesses(backgroundProcesses, backgroundProcessCount); 
+                    // displayBackgroundProcesses(); 
                     // printCommand(commandStruct);   
 
                     if (strcmp(commandStruct->arguments[0], "cd") == 0)
