@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <signal.h>
 
+int backgroundProcesses[100];
+int backgroundProcessCount = 0;
 
 struct userComm
 {
@@ -119,7 +121,7 @@ struct userComm *makeCommandStruct(char **args, int argCount)
         }
 
         // make sure & comes at the end of the string, otherwise it's treated as an argument.
-        else if (strcmp(args[inputArrayIndex], "&") == 0 && inputArrayIndex == argArrayIndex - 1)
+        else if (strcmp(args[inputArrayIndex], "&") == 0 && inputArrayIndex == argCount - 1)
         {
             // Same as the input indicator, we know we want to pay attention to the next arg
             commandStruct->background = calloc(strlen(args[inputArrayIndex]) + 1, sizeof(char));
@@ -150,6 +152,15 @@ void sigintHandler (int signum)
     char* message = "Terminated by signal 2\n";
     write(STDOUT_FILENO, message, 23);
     fflush(stdout);
+}
+
+void displayBackgroundProcesses(int args[], int argCount)
+{
+    for (int currentIndex=0; currentIndex < argCount; currentIndex++)
+    {
+        printf("%s\n", args[currentIndex]);
+        fflush(stdout);
+    }
 }
 
 void printArgs(char **args, int argCount)
@@ -226,7 +237,7 @@ int displayStatus(int fgExitValue, int fgTermSignal)
 
 int spawnChild(struct userComm* userCommand, struct sigaction signal )
 {
-    pid_t pid, wpid;
+    pid_t pid, wpid, cpid;
     int status;
     int i = 0;
 
@@ -316,10 +327,40 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
     else 
     {
     // Parent process will wait until we're good to go forward. 
-        do 
+
+
+        if (strcmp(userCommand->background, "&") == 0)
         {
-            wpid = waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+            cpid = waitpid (pid, &status, WNOHANG);
+            // Assign cpid to the cpid traker array
+            backgroundProcesses[backgroundProcessCount] = cpid;
+            backgroundProcessCount++;
+
+
+            char message[30] = "background pid is ";
+            // convert cpid to text so I can have it printed out. 
+            int pidSize = snprintf( NULL, 0, "%d", pid);
+            char* childProcessId = malloc( pidSize + 1 );
+            snprintf(childProcessId, pidSize + 1, "%d", pid); 
+
+            // Now that we're converted we put our message together
+            strcat(message, childProcessId);
+            strcat(message, "\n");
+            
+            // Deallocate our memory and then write our message 
+            free(childProcessId);
+            write(STDOUT_FILENO, message, 30);
+            fflush(stdout);
+        }
+
+        // If a command is not meant to be run as a background process it will be run as a foreground by default. 
+        else
+        {
+            do 
+            {
+                wpid = waitpid(pid, &status, WUNTRACED);
+            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        }
     }
 
   return 0;
@@ -333,8 +374,6 @@ int main()
     char exitCommand[] = "exit";
     char newLine[] = "\n";
     int i = 0;
-
-    pid_t* bgProcesses = malloc( sizeof(pid_t) * 100);
 
     /* 
     * Adpated from <CS344> (<Exploration: Signal Handling API>) https://canvas.oregonstate.edu/courses/1784217/pages/exploration-signal-handling-api?module_item_id=19893105
@@ -373,7 +412,7 @@ int main()
     // Not sure if I need this...
     int gpidSize = snprintf( NULL, 0, "%d", gpid);
     char* groupProcessId = malloc( gpidSize + 1 );
-    snprintf(groupProcessId, size + 1, "%d", pId); 
+    snprintf(groupProcessId, gpidSize + 1, "%d", pId); 
 
 
     do
@@ -418,7 +457,7 @@ int main()
                 {
                     replaceCharacters(arguments, i, processId);
                     struct userComm *commandStruct = makeCommandStruct(arguments, i);
-                    // printArgs(commandStruct->arguments, i); 
+                    displayBackgroundProcesses(backgroundProcesses, backgroundProcessCount); 
                     // printCommand(commandStruct);   
 
                     if (strcmp(commandStruct->arguments[0], "cd") == 0)
@@ -441,8 +480,6 @@ int main()
 
         // reset i after each iteration
         i = 0;
-
-
 
     } while (strcmp(arguments[0], exitCommand) != 0);
 
