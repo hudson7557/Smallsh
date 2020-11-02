@@ -15,6 +15,8 @@ int backgroundProcessCount = 0;
 int foregroundOnly = 0;
 int fgStatus = 0;
 int bgStatus;
+int fgSignaled = 1;
+int bgSignaled = 1;
 
 struct userComm
 {
@@ -158,15 +160,6 @@ void sigintHandler (int signum)
     fflush(stdout);
 }
 
-void displayBackgroundProcesses()
-{
-    for (int currentIndex=0; currentIndex < backgroundProcessCount; currentIndex++)
-    {
-        printf("%d\n", backgroundProcesses[currentIndex]);
-        fflush(stdout);
-    }
-}
-
 void printArgs(char **args, int argCount)
 {
     for (int currentIndex=0; currentIndex < argCount; currentIndex++)
@@ -191,9 +184,7 @@ void exitFunction()
     {
         kill(backgroundProcesses[index] , SIGTERM);
         // Why does sigterm show up? 
-
     }
-
 }
 
 int cdFunction(struct userComm* userCommand)
@@ -222,16 +213,56 @@ int cdFunction(struct userComm* userCommand)
     return 0;
 }
 
-void displayForegroundStatus()
-{
-    // Prints the exit status of the most recently run foreground process.
-    printf("exit value %d\n", fgStatus);
-}
-
 void displayBackgroundStatus()
 {
-    // Prints the exit status of the most recently run foreground process.
-    printf("exit value %d\n", bgStatus);
+    int bgSize = snprintf( NULL, 0, "%d", bgStatus);
+    char* bgText = malloc( bgSize + 1 );
+    snprintf(bgText, bgSize + 1, "%d", bgStatus);
+    // Use printf here to avoid what I think was a race condition,
+    // it originally used write and would display before the background process message
+
+    if (bgSignaled == 0)
+    {
+        char bgTerminatedMessage[30] = "terminated by signal ";
+        strcat(bgTerminatedMessage, bgText);
+        strcat(bgTerminatedMessage, "\n");
+        printf(bgTerminatedMessage);
+        fflush(stdout);
+        bgSignaled = 1;
+    }
+    else
+    {
+        char bgExitedMessage[30] = "exit value ";
+        strcat(bgExitedMessage, bgText);
+        strcat(bgExitedMessage, "\n");
+        printf(bgExitedMessage);
+        fflush(stdout);
+    }
+}
+
+// Look familiar?
+void displayForegroundStatus()
+{
+    int fgSize = snprintf( NULL, 0, "%d", fgStatus);
+    char* fgText = malloc( fgSize + 1 );
+    snprintf(fgText, fgSize + 1, "%d", fgStatus);
+
+    if (fgSignaled == 0)
+    {
+        char terminatedMessage[30] = "terminated by signal ";
+        strcat(terminatedMessage, fgText);
+        strcat(terminatedMessage, "\n");
+        write(STDOUT_FILENO, terminatedMessage, 30);
+        fflush(stdout);
+    }
+    else
+    {
+        char exitedMessage[30] = "exit value ";
+        strcat(exitedMessage, fgText);
+        strcat(exitedMessage, "\n");
+        write(STDOUT_FILENO, exitedMessage, 30);
+        fflush(stdout);
+    }
 }
 
 /*
@@ -353,6 +384,7 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
         if (strcmp(userCommand->background, "&") == 0)
         {
             cpid = waitpid(pid, &bgStatus, WNOHANG);
+
             // Assign cpid to the cpid traker array
             backgroundProcesses[backgroundProcessCount] = cpid;
             backgroundProcessCount++;
@@ -380,6 +412,16 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
             {
                 wpid = waitpid(pid, &fgStatus, WUNTRACED);
             } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
+
+            if (WIFSIGNALED(fgStatus))
+            {
+                fgSignaled = 0;
+                displayForegroundStatus();
+            }
+            if (WIFEXITED(fgStatus))
+            {
+                fgSignaled = 1;
+            }
         }
     }
 
@@ -418,7 +460,7 @@ int main()
 
     do
     {
-        // Check to see if a background process has completed here.
+        // Check to see if a background process has completed here, it will only return one.
         if (backgroundProcessCount != 0)
         {
             int completedId = waitpid(-1, &bgStatus, WNOHANG);
@@ -496,7 +538,7 @@ int main()
     } while (strcmp(arguments[0], exitCommand) != 0);
 
     // HERE IS WHERE WE'LL CALL/IMPLEMENT THE EXIT HANDLER.
-    exitFunction(pId);
+    exitFunction();
 
     free(processId);
     return 0;
