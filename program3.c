@@ -12,7 +12,7 @@
 int backgroundProcesses[100];
 int backgroundProcessCount = 0;
 
-int foregroundOnly = 0;
+int foregroundOnly = 1;
 int fgStatus = 0;
 int bgStatus;
 int fgSignaled = 1;
@@ -149,6 +149,11 @@ struct userComm *makeCommandStruct(char **args, int argCount)
     // Add a null at the end of the array so it works with execvp
     commandStruct->arguments[argArrayIndex + 1] = NULL;
     commandStruct->numberOfArgs = argArrayIndex;
+    if (foregroundOnly == 0)
+    {
+        // If foregroundOnly is true we just overwrite any possible background input 
+        strcpy(commandStruct->background, "");
+    }
 
     return commandStruct;
 }
@@ -158,6 +163,22 @@ void sigintHandler (int signum)
     char* message = "Terminated by signal 2\n";
     write(STDOUT_FILENO, message, 23);
     fflush(stdout);
+}
+
+void sigtstpHandler(int signum)
+{
+    if (foregroundOnly == 1)
+    {
+        foregroundOnly = 0;
+        char* entryNotification = "Entering foreground-only mode (& is now ignored)\n";
+        write(STDOUT_FILENO, entryNotification, 49);
+    }
+    else 
+    {
+        foregroundOnly = 1;
+        char* exitNotification = "Exiting foreground-only mode\n";
+        write(STDOUT_FILENO, exitNotification, 29);
+    }
 }
 
 void printArgs(char **args, int argCount)
@@ -262,6 +283,7 @@ void displayForegroundStatus()
         strcat(exitedMessage, "\n");
         write(STDOUT_FILENO, exitedMessage, 30);
         fflush(stdout);
+        
     }
 }
 
@@ -270,7 +292,7 @@ void displayForegroundStatus()
 * Used to create child processes and run shell commands such as ls and ps. 
 */
 
-int spawnChild(struct userComm* userCommand, struct sigaction signal )
+int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, struct sigaction sigtstpSignal)
 {
     pid_t pid, wpid, cpid;
     int status;
@@ -284,9 +306,9 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
     * to get the general structure of using dup2() for I/O redirection. 
     */ 
 
-    // When we fork the child inherets the environment, so we need to reset the default action of control c.
-    signal.sa_handler = sigintHandler;
-    sigaction(SIGINT, &signal, NULL);
+    // All the children need to ignore sigstp so we install that handler here. 
+    sigtstpSignal.sa_handler = SIG_IGN;
+    sigaction(SIGTSTP, &sigtstpSignal, NULL);
 
     // Since we initalize input to an empty string, if it isn't assigned something else it will 
     // still be an empty string.
@@ -408,6 +430,10 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
         // If a command is not meant to be run as a background process it will be run as a foreground by default. 
         else
         {
+            // When we fork the child inherets the environment, so we need to reset the default action of control c.
+            // We do it here so the background processes don't respond to it. 
+            sigintSignal.sa_handler = sigintHandler;
+            sigaction(SIGINT, &sigintSignal, NULL);
             do 
             {
                 wpid = waitpid(pid, &fgStatus, WUNTRACED);
@@ -431,6 +457,7 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
 int main()
 {
     // Reserve space for a command up to 2048 characters long with two extra for newline
+
     char userCommand[2050];
     char *arguments[513];
     char exitCommand[] = "exit";
@@ -443,10 +470,13 @@ int main()
     */
     struct sigaction ignore = {0};
     ignore.sa_handler = SIG_IGN;
+    sigfillset(&ignore.sa_mask);
+    ignore.sa_flags = 0;
    	sigaction(SIGINT, &ignore, NULL);
 
     struct sigaction stop_handler = {0};
-    stop_handler.sa_handler = SIG_IGN;
+    stop_handler.sa_handler = sigtstpHandler;
+    sigaction(SIGTSTP, &stop_handler, NULL);
 
     /* 
     * Adapted from <user2622016> (<09/28/15>) [<post response>]. https://stackoverflow.com/questions/8257714/how-to-convert-an-int-to-string-in-c
@@ -480,53 +510,56 @@ int main()
         // it a blank line to initialize the value. 
         arguments[0] = "";
 
-        // Read user data
-        fgets(userCommand, 2050, stdin);
-        // ISSUE OCCURS HERE, IT'S BEING READ IN TO THE STRCMP. 
-        if (strcmp(userCommand, newLine) != 0)
+        // Make sure something was read in, if isn't we don't execute the commands
+        // this is in place because signals, namely ctrl-z would cause this loop to
+        // trigger after it input and call the previous command again. 
+        if (fgets(userCommand, 2050, stdin) != NULL)
         {
-            userCommand[strcspn(userCommand, "\n")] = 0;
-        
-            // Process the command
-            char *ptr;
-            char *token = strtok_r(userCommand, " ", &ptr); 
-            
-            arguments[i] = token;
 
-            // If the token is not a comment
-            if (strcmp(token, "#") != 0)
+            if (strcmp(userCommand, newLine) != 0)
             {
-                // Create a pointer array to store the arguments
-                do
-                {   
-                    i++;
-                    token = strtok_r(NULL, " ", &ptr);
-                     
-                    arguments[i] = token;
-                } while (token != NULL && i < 513);
+                userCommand[strcspn(userCommand, "\n")] = 0;
+                // Process the command
+                char *ptr;
+                char *token = strtok_r(userCommand, " ", &ptr); 
+                
+                arguments[i] = token;
 
-                // Now that we have read in and parsed the whole string we create a struct
-                // Also make sure it's not an exit command because we don't want to mess with that.
-                if (strcmp(arguments[0], exitCommand) != 0)
+                // If the token is not a comment
+                if (strcmp(token, "#") != 0)
                 {
-                    replaceCharacters(arguments, i, processId);
-                    struct userComm *commandStruct = makeCommandStruct(arguments, i);
-                    // displayBackgroundProcesses(); 
-                    // printCommand(commandStruct);   
+                    // Create a pointer array to store the arguments
+                    do
+                    {   
+                        i++;
+                        token = strtok_r(NULL, " ", &ptr);
+                        arguments[i] = token;
 
-                    if (strcmp(commandStruct->arguments[0], "cd") == 0)
-                    {
-                        cdFunction(commandStruct);
-                    }
+                    } while (token != NULL && i < 513);
 
-                    else if (strcmp(commandStruct->arguments[0], "status") == 0)
+                    // Now that we have read in and parsed the whole string we create a struct
+                    // Also make sure it's not an exit command because we don't want to mess with that.
+                    if (strcmp(arguments[0], exitCommand) != 0)
                     {
-                        displayForegroundStatus();
-                    }
+                        replaceCharacters(arguments, i, processId);
+                        struct userComm *commandStruct = makeCommandStruct(arguments, i);
+                        // displayBackgroundProcesses(); 
+                        // printCommand(commandStruct);   
 
-                    else
-                    {
-                        spawnChild(commandStruct, ignore);
+                        if (strcmp(commandStruct->arguments[0], "cd") == 0)
+                        {
+                            cdFunction(commandStruct);
+                        }
+
+                        else if (strcmp(commandStruct->arguments[0], "status") == 0)
+                        {
+                            displayForegroundStatus();
+                        }
+
+                        else
+                        {
+                            spawnChild(commandStruct, ignore, stop_handler);
+                        }
                     }
                 }
             }
