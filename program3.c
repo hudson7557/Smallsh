@@ -266,6 +266,7 @@ void displayForegroundStatus()
         strcat(exitedMessage, "\n");
         write(STDOUT_FILENO, exitedMessage, 30);
         fflush(stdout);
+        
     }
 }
 
