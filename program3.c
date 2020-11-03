@@ -17,7 +17,9 @@ int fgStatus = 0;
 int bgStatus;
 int fgSignaled = 1;
 int bgSignaled = 1;
-int fgpid;
+int fgpid = -1;
+
+void displayForegroundStatus();
 
 struct userComm
 {
@@ -161,18 +163,24 @@ struct userComm *makeCommandStruct(char **args, int argCount)
 
 void sigintHandler (int signum)
 {
-    if (fgSignaled == 0)
+    if (fgpid != -1)
     {
-        char* message = "Terminated by signal 2\n";
-        write(STDOUT_FILENO, message, 23);
-        fflush(stdout);
+        // if our foreground did not meet a natural fate.
+        if (!WIFEXITED(&fgStatus))
+        {   
+            // then it was signaled and we need to print accordingly. 
+            fgSignaled = 0;
+            fgStatus = 2;
+        }
+        kill(fgpid, SIGTERM);
+        displayForegroundStatus();
+        fgpid = -1;
     }
     else
     {
-        char* newLine = "\n";
-        write(STDOUT_FILENO, newLine, 3);
-        fflush(stdout);
+        printf("\n");
     }
+
 }
 
 void sigtstpHandler(int signum)
@@ -316,6 +324,11 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
     * to get the general structure of using dup2() for I/O redirection. 
     */ 
 
+    // Background processes need to ignore sigint, so we install that here
+    // and change it for each foreground process. 
+    sigintSignal.sa_handler = SIG_IGN;
+    sigaction(SIGINT, &sigintSignal, NULL);
+
     // All the children need to ignore sigstp so we install that handler here. 
     sigtstpSignal.sa_handler = SIG_IGN;
     sigaction(SIGTSTP, &sigtstpSignal, NULL);
@@ -415,6 +428,7 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
         // Determine whether the process is foreground or background
         if (strcmp(userCommand->background, "&") == 0)
         {
+
             cpid = waitpid(pid, &bgStatus, WNOHANG);
 
             // Assign cpid to the cpid traker array
@@ -446,19 +460,15 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
             sigaction(SIGINT, &sigintSignal, NULL);
             do 
             {
-                wpid = waitpid(pid, &fgStatus, WUNTRACED);
                 fgpid = pid;
+                wpid = waitpid(pid, &fgStatus, WUNTRACED);
+
             } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
 
-            if (WIFSIGNALED(fgStatus))
-            {
-                fgSignaled = 0;
-
-                displayForegroundStatus();
-            }
             if (WIFEXITED(fgStatus))
             {
                 fgSignaled = 1;
+                fgpid = -1; // dummy value used to make sure we don't print the wrong message. 
             }
         }
     }
