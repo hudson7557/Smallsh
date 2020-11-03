@@ -17,8 +17,6 @@ int fgStatus = 0;
 int bgStatus;
 int fgSignaled = 1;
 int bgSignaled = 1;
-pid_t wpid;
-pid_t fgpid;
 
 struct userComm
 {
@@ -155,10 +153,8 @@ struct userComm *makeCommandStruct(char **args, int argCount)
     return commandStruct;
 }
 
-void sigintHandler(int signum)
+void sigintHandler (int signum)
 {
-    kill(fgpid, SIGTERM);
-    fgpid;
     char* message = "Terminated by signal 2\n";
     write(STDOUT_FILENO, message, 23);
     fflush(stdout);
@@ -222,6 +218,8 @@ void displayBackgroundStatus()
     int bgSize = snprintf( NULL, 0, "%d", bgStatus);
     char* bgText = malloc( bgSize + 1 );
     snprintf(bgText, bgSize + 1, "%d", bgStatus);
+    // Use printf here to avoid what I think was a race condition,
+    // it originally used write and would display before the background process message
 
     if (bgSignaled == 0)
     {
@@ -229,8 +227,6 @@ void displayBackgroundStatus()
         strcat(bgTerminatedMessage, bgText);
         strcat(bgTerminatedMessage, "\n");
         printf(bgTerminatedMessage);
-        fflush(stdout);
-        printf("*** BG SET TO 1 IN DISPLAYBACKGROUNDSTATUS***\n");
         fflush(stdout);
         bgSignaled = 1;
     }
@@ -276,7 +272,7 @@ void displayForegroundStatus()
 
 int spawnChild(struct userComm* userCommand, struct sigaction signal )
 {
-    pid_t pid,  cpid;
+    pid_t pid, wpid, cpid;
     int status;
     int i = 0;
 
@@ -288,6 +284,10 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
     * to get the general structure of using dup2() for I/O redirection. 
     */ 
 
+    // When we fork the child inherets the environment, so we need to reset the default action of control c.
+    signal.sa_handler = sigintHandler;
+    sigaction(SIGINT, &signal, NULL);
+
     // Since we initalize input to an empty string, if it isn't assigned something else it will 
     // still be an empty string.
     if (strcmp(userCommand->inputFile, "") != 0)
@@ -298,7 +298,7 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
         strcpy(tempIn, userCommand->inputFile);
 
         // open the file for write only, set permissions.
-        int in = open(tempIn, O_RDONLY);
+        int in = open(tempIn, O_RDONLY );
 
         if (in < 0) 
         {
@@ -385,20 +385,6 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
         {
             cpid = waitpid(pid, &bgStatus, WNOHANG);
 
-            // I think it's being set at run time, not at return time. 
-            if (WIFSIGNALED(bgStatus))
-            {
-                printf("*** BG SET TO 0 IN WAITPID ***\n");
-                fflush(stdout);
-                bgSignaled = 0;
-            }
-            if (WIFEXITED(bgStatus))
-            {
-                printf("*** BG SET TO 1 IN WAITPID ***\n");
-                fflush(stdout);
-                bgSignaled = 1;
-            }
-
             // Assign cpid to the cpid traker array
             backgroundProcesses[backgroundProcessCount] = cpid;
             backgroundProcessCount++;
@@ -422,15 +408,9 @@ int spawnChild(struct userComm* userCommand, struct sigaction signal )
         // If a command is not meant to be run as a background process it will be run as a foreground by default. 
         else
         {
-            // When we fork the child inherets the environment, so we need to reset the default action of control c.
-            // We do it here so the background processes don't respond to it. 
-            signal.sa_handler = sigintHandler;
-            sigaction(SIGINT, &signal, NULL);
             do 
             {
                 wpid = waitpid(pid, &fgStatus, WUNTRACED);
-                fgpid = pid;
-                
             } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
 
             if (WIFSIGNALED(fgStatus))
