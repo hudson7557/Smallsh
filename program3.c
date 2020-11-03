@@ -17,6 +17,7 @@ int fgStatus = 0;
 int bgStatus;
 int fgSignaled = 1;
 int bgSignaled = 1;
+int fgpid;
 
 struct userComm
 {
@@ -160,9 +161,18 @@ struct userComm *makeCommandStruct(char **args, int argCount)
 
 void sigintHandler (int signum)
 {
-    char* message = "Terminated by signal 2\n";
-    write(STDOUT_FILENO, message, 23);
-    fflush(stdout);
+    if (fgSignaled == 0)
+    {
+        char* message = "Terminated by signal 2\n";
+        write(STDOUT_FILENO, message, 23);
+        fflush(stdout);
+    }
+    else
+    {
+        char* newLine = "\n";
+        write(STDOUT_FILENO, newLine, 3);
+        fflush(stdout);
+    }
 }
 
 void sigtstpHandler(int signum)
@@ -437,11 +447,13 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
             do 
             {
                 wpid = waitpid(pid, &fgStatus, WUNTRACED);
+                fgpid = pid;
             } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
 
             if (WIFSIGNALED(fgStatus))
             {
                 fgSignaled = 0;
+
                 displayForegroundStatus();
             }
             if (WIFEXITED(fgStatus))
