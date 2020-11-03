@@ -11,6 +11,7 @@
 
 int backgroundProcesses[100];
 int backgroundProcessCount = 0;
+int displayedBackgroundProcesses = 0;
 
 int foregroundOnly = 1;
 int fgStatus = 0;
@@ -260,7 +261,7 @@ void displayBackgroundStatus()
     // Use printf here to avoid what I think was a race condition,
     // it originally used write and would display before the background process message
 
-    if (bgSignaled == 0)
+    if (!WIFEXITED(bgStatus))
     {
         char bgTerminatedMessage[30] = "terminated by signal ";
         strcat(bgTerminatedMessage, bgText);
@@ -513,13 +514,16 @@ int main()
     do
     {
         // Check to see if a background process has completed here, it will only return one.
-        if (backgroundProcessCount != 0)
+        if (displayedBackgroundProcesses != backgroundProcessCount)
         {
             int completedId = waitpid(-1, &bgStatus, WNOHANG);
             if (completedId > 0)
             {
                 printf("background pid %d is done: ", completedId);
                 displayBackgroundStatus();
+                displayedBackgroundProcesses++;
+
+                
             }
         }
         
