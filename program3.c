@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <signal.h>
 
+// Declaring a bunch of values that are used as flags and trackers throughout the program. 
+// fg always stands for Foreground, bg for background
 int backgroundProcesses[100];
 int backgroundProcessCount = 0;
 int displayedBackgroundProcesses = 0;
@@ -20,8 +22,12 @@ int fgSignaled = 1;
 int bgSignaled = 1;
 int fgpid = -1;
 
+// Makes it so I can call this before it appears
 void displayForegroundStatus();
 
+/*
+* Struct which is used to store the command in a easier to manipulate package. 
+*/
 struct userComm
 {
     char *arguments[512];
@@ -93,6 +99,9 @@ void replaceCharacters(char **args, int argCount, char *pId)
     }
 }
 
+/*
+* Function to create the struct for a command. It receives the arg array and argCount to know how many times to loop.
+*/
 struct userComm *makeCommandStruct(char **args, int argCount)
 {
     int inputArrayIndex = 0;
@@ -153,15 +162,22 @@ struct userComm *makeCommandStruct(char **args, int argCount)
     // Add a null at the end of the array so it works with execvp
     commandStruct->arguments[argArrayIndex + 1] = NULL;
     commandStruct->numberOfArgs = argArrayIndex;
+
     if (foregroundOnly == 0)
     {
         // If foregroundOnly is true we just overwrite any possible background input 
+        // Users have no authority here.
         strcpy(commandStruct->background, "");
     }
 
     return commandStruct;
 }
 
+
+/*
+* This function is the handler for sigint, it sets various flag, kills the 
+* child, and prints notification accordingly
+*/
 void sigintHandler (int signum)
 {
     if (fgpid != -1)
@@ -170,28 +186,37 @@ void sigintHandler (int signum)
         if (!WIFEXITED(&fgStatus))
         {   
             // then it was signaled and we need to print accordingly. 
-            fgSignaled = 0;
-            fgStatus = 2;
+            fgSignaled = 0; //Set signaled to True
+            fgStatus = 2; // Status is 2 since that's the number for Sigint
         }
-        kill(fgpid, SIGTERM);
+        // Kill the process and display the status, reap occurs in displayForgroundStatus
+        kill(fgpid, SIGTERM); 
         displayForegroundStatus();
+
+        // Assign a garbage value to fgpid to control printing.
         fgpid = -1;
     }
     else
     {
+        // If Ctrl-C was entered when no fg process is running we just print a newline.
         printf("\n");
     }
-
 }
 
+/*
+* This is the handler function for sigtstp it sets the foreground only global variable and
+* displays a message letting the user know what the system state is.
+*/
 void sigtstpHandler(int signum)
 {
+    // If foregroundOnly is false we enter foreground mode.
     if (foregroundOnly == 1)
     {
         foregroundOnly = 0;
         char* entryNotification = "Entering foreground-only mode (& is now ignored)\n";
         write(STDOUT_FILENO, entryNotification, 49);
     }
+    // If foregroundOnly is True we exit foregroundOnly mode.
     else 
     {
         foregroundOnly = 1;
@@ -200,6 +225,9 @@ void sigtstpHandler(int signum)
     }
 }
 
+/*
+* Function used to display the arg list as needed to check values and debugging purposes.
+*/
 void printArgs(char **args, int argCount)
 {
     for (int currentIndex=0; currentIndex < argCount; currentIndex++)
@@ -209,6 +237,9 @@ void printArgs(char **args, int argCount)
     }
 }
 
+/*
+* Function to display a command to ensure the struct is being assigned correctly.
+*/ 
 void printCommand(struct userComm* userCommand)
 {
     printf("Input: %s\nOutput: %s\nBackground: %s\n", userCommand->inputFile,
@@ -218,6 +249,9 @@ void printCommand(struct userComm* userCommand)
     printArgs(userCommand->arguments, userCommand->numberOfArgs);
 }
 
+/*
+* Function which terminates any remaining background processes at exit.
+*/
 void exitFunction()
 {
     for ( int index = 0; index < backgroundProcessCount; index++)
@@ -227,6 +261,9 @@ void exitFunction()
     }
 }
 
+/*
+* Function to change the current directory, if no argument is provided it defaults to the home directory.
+*/
 int cdFunction(struct userComm* userCommand)
 {
     // We know that the command will be the first index in our arguments. If there is only one we know
@@ -253,14 +290,17 @@ int cdFunction(struct userComm* userCommand)
     return 0;
 }
 
+/*
+* Function to display the status of a background process and print the appropriate message.
+*/
 void displayBackgroundStatus()
 {
+    // Calculate the size of the background status variable and then allocate memory accordingly
     int bgSize = snprintf( NULL, 0, "%d", bgStatus);
     char* bgText = malloc( bgSize + 1 );
     snprintf(bgText, bgSize + 1, "%d", bgStatus);
-    // Use printf here to avoid what I think was a race condition,
-    // it originally used write and would display before the background process message
 
+    // If the bg process we're looking at did not exit it must have been terminated.
     if (!WIFEXITED(bgStatus))
     {
         char bgTerminatedMessage[30] = "terminated by signal ";
@@ -268,8 +308,10 @@ void displayBackgroundStatus()
         strcat(bgTerminatedMessage, "\n");
         printf(bgTerminatedMessage);
         fflush(stdout);
-        bgSignaled = 1;
+        bgSignaled = 1; // Set the signaled to 1 
     }
+
+    // If the bgprocess did exit then we simply report it's exit value.
     else
     {
         char bgExitedMessage[30] = "exit value ";
@@ -280,13 +322,19 @@ void displayBackgroundStatus()
     }
 }
 
-// Look familiar?
+/*
+* Function to display the status of a foreground process and print the appropriate message.
+*/
 void displayForegroundStatus()
 {
+    // Look familiar?
+    // Calculate the size of the foreground status variable and then allocate memory accordingly
     int fgSize = snprintf( NULL, 0, "%d", fgStatus);
     char* fgText = malloc( fgSize + 1 );
     snprintf(fgText, fgSize + 1, "%d", fgStatus);
 
+    // If the foreground process was signal we show it as terminated, you can see that this was 
+    // made first before I really understood WIF.
     if (fgSignaled == 0)
     {
         char terminatedMessage[30] = "terminated by signal ";
@@ -295,6 +343,7 @@ void displayForegroundStatus()
         write(STDOUT_FILENO, terminatedMessage, 30);
         fflush(stdout);
     }
+    // Anything else just has it's exit value reported.
     else
     {
         char exitedMessage[30] = "exit value ";
@@ -304,14 +353,13 @@ void displayForegroundStatus()
         fflush(stdout);
         
     }
-    wait(NULL); // reap
+    wait(NULL); // reap the child now that we're done with it.
 }
 
 /*
 * Adapted from <Stephen Brennan> (<16/01/15>) [<Tutorial - Write a Shell in C>]. https://brennan.io/2015/01/16/write-a-shell-in-c/
 * Used to create child processes and run shell commands such as ls and ps. 
 */
-
 int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, struct sigaction sigtstpSignal)
 {
     pid_t pid, wpid, cpid;
@@ -460,19 +508,19 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
             // We do it here so the background processes don't respond to it. 
             sigintSignal.sa_handler = sigintHandler;
             sigaction(SIGINT, &sigintSignal, NULL);
+
             do 
             {
-                fgpid = pid;
+                fgpid = pid; // assign the current pid to fgpid which is used for killing/reaping if necessary.
                 wpid = waitpid(pid, &fgStatus, WUNTRACED);
-
 
             } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
 
             if (WIFEXITED(fgStatus))
             {
-                fgSignaled = 1;
+                fgSignaled = 1; // If it exited it wasn't signaled.
                 fgpid = -1; // dummy value used to make sure we don't print the wrong message. 
-                fgStatus = WEXITSTATUS(fgStatus);
+                fgStatus = WEXITSTATUS(fgStatus); // if it exited get the status, else it'll be a multiple of 16, I think.
             }
         }
     }
@@ -480,19 +528,23 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
   return 0;
 }
 
+/*
+* The mess of a main function, this reads in a user command, parses it, sends it to expansion and struct creation, then calls the correct
+* functions depending on what input was received.
+*/
 int main()
 {
     // Reserve space for a command up to 2048 characters long with two extra for newline
 
-    char userCommand[2050];
-    char *arguments[513];
+    char userCommand[2049]; // extra for the \n fgets includes.
+    char *arguments[513]; // extra for null that I add to work with execvp
     char exitCommand[] = "exit";
     char newLine[] = "\n";
-    int i = 0;
+    int i = 0; // used to track index during parsing
 
     /* 
     * Adpated from <CS344> (<Exploration: Signal Handling API>) https://canvas.oregonstate.edu/courses/1784217/pages/exploration-signal-handling-api?module_item_id=19893105
-    * to make the parent process ignore sigint and sigstp
+    * to make the parent process respond correctly to sigint and sigstp
     */
     struct sigaction ignore = {0};
     ignore.sa_handler = SIG_IGN;
@@ -524,7 +576,8 @@ int main()
             {
                 printf("background pid %d is done: ", completedId);
                 displayBackgroundStatus();
-                displayedBackgroundProcesses++;
+                displayedBackgroundProcesses++; // chose to use index tracking to monitor what processes have completed
+                // interestingly, when I didn't have this it would sometimes print out a random pid with the correct flags.
             }
         }
         
