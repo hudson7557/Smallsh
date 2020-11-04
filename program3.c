@@ -304,6 +304,7 @@ void displayForegroundStatus()
         fflush(stdout);
         
     }
+    wait(NULL); // reap
 }
 
 /*
@@ -318,7 +319,7 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
     int i = 0;
 
     pid = fork();
-  
+
     if (pid == 0) {
     /*
     * dup2() calls adapted from <CS 702 - Operating Systems> (<Spring 2005>) [<Using dup2 for I/O Redirection and Pipes>] <.shttp://www.cs.loyola.edu/~jglenn/702/S2005/Examples/dup2.html
@@ -464,12 +465,14 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
                 fgpid = pid;
                 wpid = waitpid(pid, &fgStatus, WUNTRACED);
 
+
             } while (!WIFEXITED(fgStatus) && !WIFSIGNALED(fgStatus));
 
             if (WIFEXITED(fgStatus))
             {
                 fgSignaled = 1;
                 fgpid = -1; // dummy value used to make sure we don't print the wrong message. 
+                fgStatus = WEXITSTATUS(fgStatus);
             }
         }
     }
@@ -522,8 +525,6 @@ int main()
                 printf("background pid %d is done: ", completedId);
                 displayBackgroundStatus();
                 displayedBackgroundProcesses++;
-
-                
             }
         }
         
