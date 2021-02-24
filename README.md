@@ -14,7 +14,7 @@ The "exit", "cd", and "status" commands were custom implemented. All other comma
 
 - $$ will be expanded into the process ID if it is included in a command (Ex. "echo $$" will display the PID).
 
-- To use a background process enter & at the end of a command. (Ex. "sleep 10 &")
+- To use a background process enter & at the end of a command. (Ex. "sleep 10 &").
 
 - Signal handlers catch Ctrl-Z and Ctrl-C. 
   - Ctrl-Z will cause the program to enter/exit foreground only mode.
