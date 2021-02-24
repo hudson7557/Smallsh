@@ -528,11 +528,7 @@ int spawnChild(struct userComm* userCommand, struct sigaction sigintSignal, stru
   return 0;
 }
 
-/*
-* The mess of a main function, this reads in a user command, parses it, sends it to expansion and struct creation, then calls the correct
-* functions depending on what input was received.
-*/
-int main()
+char *getInstruction()
 {
     // Reserve space for a command up to 2048 characters long with two extra for newline
 
@@ -566,93 +562,110 @@ int main()
     snprintf(processId, size + 1, "%d", pId); 
     int gpid = getpgrp();
 
-    do
+    // Check to see if a background process has completed here, it will only return one.
+    if (displayedBackgroundProcesses != backgroundProcessCount)
     {
-        // Check to see if a background process has completed here, it will only return one.
-        if (displayedBackgroundProcesses != backgroundProcessCount)
+        int completedId = waitpid(-1, &bgStatus, WNOHANG);
+        if (completedId > 0)
         {
-            int completedId = waitpid(-1, &bgStatus, WNOHANG);
-            if (completedId > 0)
-            {
-                printf("background pid %d is done: ", completedId);
-                displayBackgroundStatus();
-                displayedBackgroundProcesses++; // chose to use index tracking to monitor what processes have completed
-                // interestingly, when I didn't have this it would sometimes print out a random pid with the correct flags.
-            }
+            printf("background pid %d is done: ", completedId);
+            displayBackgroundStatus();
+            displayedBackgroundProcesses++; // chose to use index tracking to monitor what processes have completed
+            // interestingly, when I didn't have this it would sometimes print out a random pid with the correct flags.
         }
-        
-        // printf should be okay here since this isn't a signal handler.
-        printf(": ");
-        fflush(stdout);
+    }
+    
+    // printf should be okay here since this isn't a signal handler.
+    printf(": ");
+    fflush(stdout);
 
-        // This was a unique bug in my control structure. If a user inputs ctrl-c arguments 0 is never assigned because
-        // nothing was read in. As such, it would crash when the while condition evaluated. To get around this we just give
-        // it a blank line to initialize the value. 
-        arguments[0] = "";
+    // This was a unique bug in my control structure. If a user inputs ctrl-c arguments 0 is never assigned because
+    // nothing was read in. As such, it would crash when the while condition evaluated. To get around this we just give
+    // it a blank line to initialize the value. 
+    arguments[0] = "";
 
-        // Make sure something was read in, if isn't we don't execute the commands
-        // this is in place because signals, namely ctrl-z would cause this loop to
-        // trigger after it input and call the previous command again. 
-        if (fgets(userCommand, 2050, stdin) != NULL)
+    // Make sure something was read in, if isn't we don't execute the commands
+    // this is in place because signals, namely ctrl-z would cause this loop to
+    // trigger after it input and call the previous command again. 
+    if (fgets(userCommand, 2050, stdin) != NULL)
+    {
+
+        if (strcmp(userCommand, newLine) != 0)
         {
+            userCommand[strcspn(userCommand, "\n")] = 0;
+            // Process the command
+            char *ptr;
+            char *token = strtok_r(userCommand, " ", &ptr); 
+            
+            arguments[i] = token;
 
-            if (strcmp(userCommand, newLine) != 0)
+            // If the token is not a comment
+            if (strcmp(token, "#") != 0)
             {
-                userCommand[strcspn(userCommand, "\n")] = 0;
-                // Process the command
-                char *ptr;
-                char *token = strtok_r(userCommand, " ", &ptr); 
-                
-                arguments[i] = token;
+                // Create a pointer array to store the arguments
+                do
+                {   
+                    i++;
+                    token = strtok_r(NULL, " ", &ptr);
+                    arguments[i] = token;
 
-                // If the token is not a comment
-                if (strcmp(token, "#") != 0)
+                } while (token != NULL && i < 513);
+
+                // Now that we have read in and parsed the whole string we create a struct
+                // Also make sure it's not an exit command because we don't want to mess with that.
+                if (strcmp(arguments[0], exitCommand) != 0)
                 {
-                    // Create a pointer array to store the arguments
-                    do
-                    {   
-                        i++;
-                        token = strtok_r(NULL, " ", &ptr);
-                        arguments[i] = token;
+                    replaceCharacters(arguments, i, processId);
+                    struct userComm *commandStruct = makeCommandStruct(arguments, i);
+                    // displayBackgroundProcesses(); 
+                    // printCommand(commandStruct);   
 
-                    } while (token != NULL && i < 513);
-
-                    // Now that we have read in and parsed the whole string we create a struct
-                    // Also make sure it's not an exit command because we don't want to mess with that.
-                    if (strcmp(arguments[0], exitCommand) != 0)
+                    if (strcmp(commandStruct->arguments[0], "cd") == 0)
                     {
-                        replaceCharacters(arguments, i, processId);
-                        struct userComm *commandStruct = makeCommandStruct(arguments, i);
-                        // displayBackgroundProcesses(); 
-                        // printCommand(commandStruct);   
-
-                        if (strcmp(commandStruct->arguments[0], "cd") == 0)
-                        {
-                            cdFunction(commandStruct);
-                        }
-
-                        else if (strcmp(commandStruct->arguments[0], "status") == 0)
-                        {
-                            displayForegroundStatus();
-                        }
-
-                        else
-                        {
-                            spawnChild(commandStruct, ignore, stop_handler);
-                        }
+                        cdFunction(commandStruct);
                     }
+
+                    else if (strcmp(commandStruct->arguments[0], "status") == 0)
+                    {
+                        displayForegroundStatus();
+                    }
+
+                    else
+                    {
+                        spawnChild(commandStruct, ignore, stop_handler);
+                    }
+                }
+                else 
+                {
+                    free(processId);
                 }
             }
         }
+    }
 
-        // reset i after each iteration
-        i = 0;
+    // reset i after each iteration
+    i = 0;
 
-    } while (strcmp(arguments[0], exitCommand) != 0);
+    return arguments[0];
+}
+
+/*
+* The mess of a main function, this reads in a user command, parses it, sends it to expansion and struct creation, then calls the correct
+* functions depending on what input was received.
+*/
+int main()
+{
+    char exitCommand[] = "exit";
+    char *command;
+
+    do
+    {
+        command = getInstruction();
+
+    } while (strcmp(command, exitCommand) != 0);
 
     // HERE IS WHERE WE'LL CALL/IMPLEMENT THE EXIT HANDLER.
     exitFunction();
 
-    free(processId);
     return 0;
 }

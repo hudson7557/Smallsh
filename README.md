@@ -21,3 +21,5 @@ The "exit", "cd", and "status" commands were custom implemented. All other comma
   - Ctrl-C is simply ignored.
 
 - All other commands such as ls, ps, sleep, etc. can be run as normal.
+
+- Also supports input and output redirection using < >.
